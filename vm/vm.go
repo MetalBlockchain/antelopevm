@@ -6,6 +6,7 @@ import (
 	"net/rpc"
 	"time"
 
+	"github.com/MetalBlockchain/antelopevm/state"
 	"github.com/MetalBlockchain/metalgo/database/manager"
 	"github.com/MetalBlockchain/metalgo/ids"
 	"github.com/MetalBlockchain/metalgo/snow"
@@ -43,7 +44,7 @@ type VM struct {
 	dbManager manager.Manager
 
 	// State of this VM
-	state State
+	state state.State
 
 	// ID of the preferred block
 	preferred ids.ID
@@ -57,7 +58,7 @@ type VM struct {
 	// Block ID --> Block
 	// Each element is a block that passed verification but
 	// hasn't yet been accepted/rejected
-	verifiedBlocks map[ids.ID]*Block
+	verifiedBlocks map[ids.ID]*state.Block
 
 	// Indicates that this VM has finised bootstrapping for the chain
 	bootstrapped utils.AtomicBool
@@ -91,10 +92,10 @@ func (vm *VM) Initialize(
 	vm.dbManager = dbManager
 	vm.ctx = ctx
 	vm.toEngine = toEngine
-	vm.verifiedBlocks = make(map[ids.ID]*Block)
+	vm.verifiedBlocks = make(map[ids.ID]*state.Block)
 
 	// Create new state
-	vm.state = NewState(vm.dbManager.Current().Database, vm)
+	vm.state = state.NewState(vm.dbManager.Current().Database)
 
 	// Initialize genesis
 	if err := vm.initGenesis(genesisData); err != nil {
@@ -250,7 +251,7 @@ func (vm *VM) NotifyBlockReady() {
 // GetBlock implements the snowman.ChainVM interface
 func (vm *VM) GetBlock(blkID ids.ID) (snowman.Block, error) { return vm.getBlock(blkID) }
 
-func (vm *VM) getBlock(blkID ids.ID) (*Block, error) {
+func (vm *VM) getBlock(blkID ids.ID) (*state.Block, error) {
 	// If block is in memory, return it.
 	if blk, exists := vm.verifiedBlocks[blkID]; exists {
 		return blk, nil
@@ -277,16 +278,16 @@ func (vm *VM) proposeBlock(data [dataLen]byte) {
 // from another node
 func (vm *VM) ParseBlock(bytes []byte) (snowman.Block, error) {
 	// A new empty block
-	block := &Block{}
+	block := &state.Block{}
 
 	// Unmarshal the byte repr. of the block into our empty block
-	_, err := Codec.Unmarshal(bytes, block)
+	_, err := state.Codec.Unmarshal(bytes, block)
 	if err != nil {
 		return nil, err
 	}
 
 	// Initialize the block
-	block.Initialize(bytes, choices.Processing, vm)
+	block.Initialize(bytes, choices.Processing)
 
 	if blk, err := vm.getBlock(block.ID()); err == nil {
 		// If we have seen this block before, return it with the most up-to-date
@@ -302,8 +303,8 @@ func (vm *VM) ParseBlock(bytes []byte) (snowman.Block, error) {
 // - the block's parent is [parentID]
 // - the block's data is [data]
 // - the block's timestamp is [timestamp]
-func (vm *VM) NewBlock(parentID ids.ID, height uint64, data [dataLen]byte, timestamp time.Time) (*Block, error) {
-	block := &Block{
+func (vm *VM) NewBlock(parentID ids.ID, height uint64, data [dataLen]byte, timestamp time.Time) (*state.Block, error) {
+	block := &state.Block{
 		PreviousBlock: parentID,
 		Hght:          height,
 		Tmstmp:        timestamp.Unix(),
@@ -311,14 +312,14 @@ func (vm *VM) NewBlock(parentID ids.ID, height uint64, data [dataLen]byte, times
 	}
 
 	// Get the byte representation of the block
-	blockBytes, err := Codec.Marshal(CodecVersion, block)
+	blockBytes, err := state.Codec.Marshal(state.CodecVersion, block)
 	if err != nil {
 		return nil, err
 	}
 
 	// Initialize the block by providing it with its byte representation
 	// and a reference to this VM
-	block.Initialize(blockBytes, choices.Processing, vm)
+	block.Initialize(blockBytes, choices.Processing)
 	return block, nil
 }
 

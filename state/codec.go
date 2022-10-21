@@ -1,8 +1,9 @@
-package vm
+package state
 
 import (
 	"github.com/MetalBlockchain/metalgo/codec"
 	"github.com/MetalBlockchain/metalgo/codec/linearcodec"
+	"github.com/MetalBlockchain/metalgo/utils/wrappers"
 )
 
 const (
@@ -20,8 +21,15 @@ func init() {
 	c := linearcodec.NewDefault()
 	Codec = codec.NewDefaultManager()
 
-	// Register codec to manager with CodecVersion
-	if err := Codec.RegisterCodec(CodecVersion, c); err != nil {
-		panic(err)
+	errs := wrappers.Errs{}
+	errs.Add(
+		c.RegisterType(&Account{}),
+		c.RegisterType(&Permission{}),
+		c.RegisterType(&PermissionLink{}),
+		Codec.RegisterCodec(CodecVersion, c),
+	)
+
+	if errs.Errored() {
+		panic(errs.Err)
 	}
 }

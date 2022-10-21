@@ -1,4 +1,4 @@
-package vm
+package state
 
 import (
 	"github.com/MetalBlockchain/metalgo/cache"
@@ -36,9 +36,6 @@ type blockState struct {
 	// block database
 	blockDB      database.Database
 	lastAccepted ids.ID
-
-	// vm reference
-	vm *VM
 }
 
 // blkWrapper wraps the actual blk bytes and status to persist them together
@@ -48,11 +45,10 @@ type blkWrapper struct {
 }
 
 // NewBlockState returns BlockState with a new cache and given db
-func NewBlockState(db database.Database, vm *VM) BlockState {
+func NewBlockState(db database.Database) BlockState {
 	return &blockState{
 		blkCache: &cache.LRU{Size: blockCacheSize},
 		blockDB:  db,
-		vm:       vm,
 	}
 }
 
@@ -94,7 +90,7 @@ func (s *blockState) GetBlock(blkID ids.ID) (*Block, error) {
 	}
 
 	// initialize block with block bytes, status and vm
-	blk.Initialize(blkw.Blk, blkw.Status, s.vm)
+	blk.Initialize(blkw.Blk, blkw.Status)
 
 	// put block into cache
 	s.blkCache.Put(blkID, blk)
