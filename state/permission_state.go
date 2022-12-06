@@ -28,10 +28,14 @@ type PermissionState interface {
 	GetPermissionByOwner(types.AccountName, types.PermissionName) (*Permission, error)
 	UpdatePermission(*Permission) error
 	PutPermission(*Permission) error
+	RemovePermission(*Permission) error
 
 	GetPermissionLink([]byte) (*PermissionLink, error)
 	GetPermissionLinkByActionName(types.AccountName, types.AccountName, types.ActionName) (*PermissionLink, error)
+	GetPermissionLinksByPermissionName(types.AccountName, types.PermissionName) database.Iterator
+	UpdatePermissionLink(*PermissionLink, func(*PermissionLink)) error
 	PutPermissionLink(*PermissionLink) error
+	RemovePermissionLink(*PermissionLink) error
 }
 
 type permissionState struct {
@@ -137,6 +141,30 @@ func (s *permissionState) PutPermission(perm *Permission) error {
 	return batch.Write()
 }
 
+func (s *permissionState) RemovePermission(perm *Permission) error {
+	if _, err := s.GetPermission(perm.ID.ToBytes()); err != nil {
+		return err
+	}
+
+	// Perform updates
+	indexKeys := getPermissionIndexKeys(*perm)
+	batch := s.db.NewBatch()
+
+	for _, key := range indexKeys {
+		if err := batch.Delete(key); err != nil {
+			return err
+		}
+	}
+
+	key := append(permissionIdKey, perm.ID.ToBytes()...)
+
+	if err := batch.Delete(key); err != nil {
+		return err
+	}
+
+	return batch.Write()
+}
+
 func (s *permissionState) GeneratePermissionId() (uint64, error) {
 	var id uint64
 
@@ -189,17 +217,81 @@ func (s *permissionState) GetPermissionLinkByActionName(account types.AccountNam
 	return s.GetPermissionLink(wrappedBytes)
 }
 
-func (s *permissionState) PutPermissionLink(link *PermissionLink) error {
+func (s *permissionState) GetPermissionLinksByPermissionName(account types.AccountName, permission types.PermissionName) database.Iterator {
+	accountBytes, _ := account.Pack()
+	requiredPermissionBytes, _ := permission.Pack()
+	byPermissionName := append(permissionLinkPermissionNameKey, accountBytes...)
+	byPermissionName = append(byPermissionName, separator...)
+	byPermissionName = append(byPermissionName, requiredPermissionBytes...)
+	byPermissionName = append(byPermissionName, separator...)
+	iterator := s.db.NewIteratorWithPrefix(byPermissionName)
+
+	return iterator
+}
+
+func (s *permissionState) UpdatePermissionLink(link *PermissionLink, updateFunc func(*PermissionLink)) error {
+	if _, err := s.GetPermissionLink(link.ID.ToBytes()); err != nil {
+		return err
+	}
+
+	// Perform updates
+	oldIndexKeys := getPermissionLinkIndexKeys(*link)
+	updateFunc(link)
+	newIndexKeys := getPermissionLinkIndexKeys(*link)
+	batch := s.db.NewBatch()
+
+	for _, key := range oldIndexKeys {
+		if err := batch.Delete(key); err != nil {
+			return err
+		}
+	}
+
+	for _, key := range newIndexKeys {
+		if err := batch.Put(key, link.ID.ToBytes()); err != nil {
+			return err
+		}
+	}
+
 	wrappedBytes, err := Codec.Marshal(CodecVersion, &link)
 
 	if err != nil {
 		return err
 	}
 
-	accountBytes, _ := link.Account.Pack()
-	codeBytes, _ := link.Code.Pack()
-	messageTypeBytes, _ := link.MessageType.Pack()
-	requiredPermissionBytes, _ := link.RequiredPermission.Pack()
+	key := append(permissionLinkIdKey, link.ID.ToBytes()...)
+
+	if err = batch.Put(key, wrappedBytes); err != nil {
+		return err
+	}
+
+	return batch.Write()
+}
+
+func (s *permissionState) RemovePermissionLink(link *PermissionLink) error {
+	if _, err := s.GetPermissionLink(link.ID.ToBytes()); err != nil {
+		return err
+	}
+
+	// Perform updates
+	indexKeys := getPermissionLinkIndexKeys(*link)
+	batch := s.db.NewBatch()
+
+	for _, key := range indexKeys {
+		if err := batch.Delete(key); err != nil {
+			return err
+		}
+	}
+
+	key := append(permissionLinkIdKey, link.ID.ToBytes()...)
+
+	if err := batch.Delete(key); err != nil {
+		return err
+	}
+
+	return batch.Write()
+}
+
+func (s *permissionState) PutPermissionLink(link *PermissionLink) error {
 	id, err := s.GeneratePermissionLinkId()
 
 	if err != nil {
@@ -207,26 +299,23 @@ func (s *permissionState) PutPermissionLink(link *PermissionLink) error {
 	}
 
 	link.ID = types.IdType(id)
+
+	wrappedBytes, err := Codec.Marshal(CodecVersion, &link)
+
+	if err != nil {
+		return err
+	}
+
 	batch := s.db.NewBatch()
-
 	key := append(permissionLinkIdKey, link.ID.ToBytes()...)
-	byActionName := append(permissionLinkActionNameKey, accountBytes...)
-	byActionName = append(byActionName, separator...)
-	byActionName = append(byActionName, codeBytes...)
-	byActionName = append(byActionName, separator...)
-	byActionName = append(byActionName, messageTypeBytes...)
-
-	byPermissionName := append(permissionLinkPermissionNameKey, accountBytes...)
-	byPermissionName = append(byPermissionName, separator...)
-	byPermissionName = append(byPermissionName, codeBytes...)
-	byPermissionName = append(byPermissionName, separator...)
-	byPermissionName = append(byPermissionName, messageTypeBytes...)
-	byPermissionName = append(byPermissionName, separator...)
-	byPermissionName = append(byPermissionName, requiredPermissionBytes...)
+	indexKeys := getPermissionLinkIndexKeys(*link)
 
 	batch.Put(key, wrappedBytes)
-	batch.Put(byActionName, link.ID.ToBytes())
-	batch.Put(byPermissionName, link.ID.ToBytes())
+
+	for _, indexKey := range indexKeys {
+		batch.Put(indexKey, link.ID.ToBytes())
+		batch.Put(indexKey, link.ID.ToBytes())
+	}
 
 	return batch.Write()
 }
@@ -246,4 +335,51 @@ func (s *permissionState) GeneratePermissionLinkId() (uint64, error) {
 	}
 
 	return id, nil
+}
+
+func getPermissionIndexKeys(perm Permission) map[string][]byte {
+	keys := make(map[string][]byte)
+	nameBytes, _ := perm.Name.Pack()
+	ownerBytes, _ := perm.Owner.Pack()
+	byNameKey := append(permissionNameKey, nameBytes...)
+	byNameKey = append(byNameKey, separator...)
+	byNameKey = append(byNameKey, perm.ID.ToBytes()...)
+
+	byParentKey := append(permissionParentKey, perm.Parent.ToBytes()...)
+	byParentKey = append(byParentKey, separator...)
+	byParentKey = append(byParentKey, perm.ID.ToBytes()...)
+
+	byOwnerKey := append(permissionOwnerKey, ownerBytes...)
+	byOwnerKey = append(byOwnerKey, separator...)
+	byOwnerKey = append(byOwnerKey, nameBytes...)
+
+	keys["byName"] = byNameKey
+	keys["byParent"] = byParentKey
+	keys["byOwner"] = byOwnerKey
+
+	return keys
+}
+
+func getPermissionLinkIndexKeys(link PermissionLink) map[string][]byte {
+	keys := make(map[string][]byte)
+	accountBytes, _ := link.Account.Pack()
+	codeBytes, _ := link.Code.Pack()
+	messageTypeBytes, _ := link.MessageType.Pack()
+	requiredPermissionBytes, _ := link.RequiredPermission.Pack()
+	byActionName := append(permissionLinkActionNameKey, accountBytes...)
+	byActionName = append(byActionName, separator...)
+	byActionName = append(byActionName, codeBytes...)
+	byActionName = append(byActionName, separator...)
+	byActionName = append(byActionName, messageTypeBytes...)
+
+	byPermissionName := append(permissionLinkPermissionNameKey, accountBytes...)
+	byPermissionName = append(byPermissionName, separator...)
+	byPermissionName = append(byPermissionName, requiredPermissionBytes...)
+	byPermissionName = append(byPermissionName, separator...)
+	byPermissionName = append(byPermissionName, link.ID.ToBytes()...)
+
+	keys["byActionName"] = byActionName
+	keys["byPermissionName"] = byPermissionName
+
+	return keys
 }

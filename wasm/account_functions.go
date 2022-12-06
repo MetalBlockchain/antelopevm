@@ -1,68 +1,52 @@
 package wasm
 
-import "github.com/wasmerio/wasmer-go/wasmer"
+import (
+	"fmt"
 
-func RequireAuth(context *ExecutionContext) *wasmer.Function {
-	return wasmer.NewFunction(
-		context.store,
-		wasmer.NewFunctionType(
-			wasmer.NewValueTypes(wasmer.I64),
-			wasmer.NewValueTypes(),
-		),
-		func(args []wasmer.Value) ([]wasmer.Value, error) {
-			return []wasmer.Value{wasmer.NewI32(42)}, nil
-		},
-	)
+	"github.com/MetalBlockchain/antelopevm/utils"
+)
+
+func GetAccountFunctions(context *ExecutionContext) map[string]interface{} {
+	functions := make(map[string]interface{})
+
+	functions["require_auth"] = requireAuth(context)
+	functions["current_receiver"] = currentReceiver(context)
+	functions["is_account"] = isAccount(context)
+	functions["require_recipient"] = requireRecipient(context)
+	functions["has_auth"] = hasAuth(context)
+
+	return functions
 }
 
-func CurrentReceiver(context *ExecutionContext) *wasmer.Function {
-	return wasmer.NewFunction(
-		context.store,
-		wasmer.NewFunctionType(
-			wasmer.NewValueTypes(),
-			wasmer.NewValueTypes(wasmer.I64),
-		),
-		func(args []wasmer.Value) ([]wasmer.Value, error) {
-			return []wasmer.Value{wasmer.NewI32(42)}, nil
-		},
-	)
+func requireAuth(context *ExecutionContext) func(uint64) {
+	return func(arg uint64) {
+		fmt.Printf("RequireAuth %v\n", utils.NameToString(arg))
+	}
 }
 
-func IsAccount(context *ExecutionContext) *wasmer.Function {
-	return wasmer.NewFunction(
-		context.store,
-		wasmer.NewFunctionType(
-			wasmer.NewValueTypes(wasmer.I64),
-			wasmer.NewValueTypes(wasmer.I32),
-		),
-		func(args []wasmer.Value) ([]wasmer.Value, error) {
-			return []wasmer.Value{wasmer.NewI32(42)}, nil
-		},
-	)
+func currentReceiver(context *ExecutionContext) func() uint64 {
+	return func() uint64 {
+		fmt.Printf("current_receiver\n")
+		return uint64(1)
+	}
 }
 
-func RequireRecipient(context *ExecutionContext) *wasmer.Function {
-	return wasmer.NewFunction(
-		context.store,
-		wasmer.NewFunctionType(
-			wasmer.NewValueTypes(wasmer.I64),
-			wasmer.NewValueTypes(),
-		),
-		func(args []wasmer.Value) ([]wasmer.Value, error) {
-			return []wasmer.Value{wasmer.NewI32(42)}, nil
-		},
-	)
+func isAccount(context *ExecutionContext) func(uint64) uint32 {
+	return func(arg uint64) uint32 {
+		fmt.Printf("IsAccount %v\n", arg)
+		return 1
+	}
 }
 
-func HasAuth(context *ExecutionContext) *wasmer.Function {
-	return wasmer.NewFunction(
-		context.store,
-		wasmer.NewFunctionType(
-			wasmer.NewValueTypes(wasmer.I64),
-			wasmer.NewValueTypes(wasmer.I32),
-		),
-		func(args []wasmer.Value) ([]wasmer.Value, error) {
-			return []wasmer.Value{wasmer.NewI32(42)}, nil
-		},
-	)
+func requireRecipient(context *ExecutionContext) func(uint64) {
+	return func(arg uint64) {
+		fmt.Printf("RequireRecipient %v\n", arg)
+	}
+}
+
+func hasAuth(context *ExecutionContext) func(uint64) uint32 {
+	return func(arg uint64) uint32 {
+		fmt.Printf("HasAuth %v\n", arg)
+		return 1
+	}
 }

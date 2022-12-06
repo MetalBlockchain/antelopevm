@@ -6,7 +6,8 @@ import (
 )
 
 var (
-	_ State = &state{}
+	_              State = &s{}
+	initializedKey       = []byte("initialized")
 )
 
 type State interface {
@@ -20,36 +21,36 @@ type State interface {
 	SetInitialized() error
 }
 
-type state struct {
+type s struct {
 	BlockState
 	AccountState
 	PermissionState
 	baseDB *versiondb.Database
 }
 
-func NewState(db database.Database) State {
+func NewState(vm VM, db database.Database) State {
 	baseDB := versiondb.New(db)
 
-	return &state{
-		BlockState:      NewBlockState(baseDB),
+	return &s{
+		BlockState:      NewBlockState(vm, baseDB),
 		AccountState:    NewAccountState(baseDB),
 		PermissionState: NewPermissionState(baseDB),
 		baseDB:          baseDB,
 	}
 }
 
-func (s *state) Commit() error {
+func (s *s) Commit() error {
 	return s.baseDB.Commit()
 }
 
-func (s *state) Close() error {
+func (s *s) Close() error {
 	return s.baseDB.Close()
 }
 
-func (s *state) IsInitialized() (bool, error) {
-	return true, nil
+func (s *s) IsInitialized() (bool, error) {
+	return s.baseDB.Has(initializedKey)
 }
 
-func (s *state) SetInitialized() error {
-	return nil
+func (s *s) SetInitialized() error {
+	return s.baseDB.Put(initializedKey, []byte{1})
 }

@@ -1,28 +1,64 @@
 package wasm
 
 import (
+	"context"
 	"fmt"
+	"log"
+	"time"
 
 	"github.com/MetalBlockchain/antelopevm/utils"
+	"github.com/tetratelabs/wazero"
+	"github.com/tetratelabs/wazero/api"
 	"github.com/wasmerio/wasmer-go/wasmer"
 )
 
 type ExecutionContext struct {
-	engine  *wasmer.Engine
+	context context.Context
+	engine  wazero.Runtime
 	store   *wasmer.Store
 	imports *wasmer.ImportObject
 	ram     *wasmer.Memory
+	module  api.Module
 }
 
-func (context *ExecutionContext) Initialize() {
-	context.engine = wasmer.NewEngine()
-	context.store = wasmer.NewStore(context.engine)
-	context.imports = wasmer.NewImportObject()
-	limits, _ := wasmer.NewLimits(1, 4)
-	context.ram = wasmer.NewMemory(context.store, wasmer.NewMemoryType(limits))
-	context.imports.Register(
-		"env",
-		map[string]wasmer.IntoExtern{
+func (c *ExecutionContext) Initialize() {
+	c.context = context.Background()
+	c.engine = wazero.NewRuntime(c.context)
+	c.imports = wasmer.NewImportObject()
+	c.engine.NewHostModuleBuilder("env").
+		ExportFunctions(GetAccountFunctions(c)).
+		ExportFunctions(GetMemoryFunctions(c)).
+		ExportFunctions(GetConsoleFunctions(c)).
+		ExportFunctions(GetActionFunctions(c)).
+		ExportFunctions(GetMathFunctions(c)).
+		ExportFunction("eosio_assert", EosIoAssert(c)).
+		ExportFunction("db_find_i64", FindI64(c)).
+		ExportFunction("abort", Abort(c)).
+		ExportFunction("db_update_i64", UpdateI64(c)).
+		ExportFunction("db_store_i64", StoreI64(c)).
+		ExportFunction("db_next_i64", NextI64(c)).
+		ExportFunction("__extendsftf2", Extendsftf2(c)).
+		ExportFunction("__floatsitf", Floatsitf(c)).
+		ExportFunction("__multf3", Multf3(c)).
+		ExportFunction("__floatunsitf", Floatunsitf(c)).
+		ExportFunction("__divtf3", Divtf3(c)).
+		ExportFunction("__addtf3", Addtf3(c)).
+		ExportFunction("__extenddftf2", Extenddftf2(c)).
+		ExportFunction("__eqtf2", Eqtf2(c)).
+		ExportFunction("__letf2", Letf2(c)).
+		ExportFunction("__netf2", Netf2(c)).
+		ExportFunction("__subtf3", Subtf3(c)).
+		ExportFunction("__trunctfdf2", Trunctfdf2(c)).
+		ExportFunction("__getf2", Getf2(c)).
+		ExportFunction("__trunctfsf2", Trunctfsf2(c)).
+		ExportFunction("__unordtf2", Unordtf2(c)).
+		ExportFunction("__fixunstfsi", Fixunstfsi(c)).
+		ExportFunction("__fixtfsi", Fixtfsi(c)).
+		ExportFunction("eosio_assert_code", AssertCode(c)).
+		ExportFunction("db_get_i64", GetI64(c)).
+		ExportFunction("db_remove_i64", RemoveI64(c)).
+		Instantiate(c.context, c.engine)
+	/* map[string]wasmer.IntoExtern{
 			"require_auth":      RequireAuth(context),
 			"eosio_assert":      EosIoAssert(context),
 			"db_find_i64":       FindI64(context),
@@ -61,26 +97,30 @@ func (context *ExecutionContext) Initialize() {
 			"db_get_i64":        GetI64(context),
 			"db_remove_i64":     RemoveI64(context),
 		},
-	)
+	) */
 }
 
-func (context *ExecutionContext) Exec(code []byte) {
-	module, _ := wasmer.NewModule(context.store, code)
-	instance, err := wasmer.NewInstance(module, context.imports)
+func (c *ExecutionContext) Exec(code []byte) {
+	module, err := c.engine.InstantiateModuleFromBinary(c.context, code)
 
 	if err != nil {
 		panic(fmt.Sprintln("Failed to instantiate the module: ", err))
 	}
 
-	exportedFunc, exportedFuncErr := instance.Exports.GetFunction("apply")
+	c.module = module
+	exportedFunc := module.ExportedFunction("apply")
 
-	if exportedFuncErr != nil {
-		panic(fmt.Sprintln("Failed to instantiate the function: ", exportedFuncErr))
+	if exportedFunc == nil {
+		panic(fmt.Sprintln("Failed to find apply function"))
 	}
 
-	receiver := &utils.Name{Value: "glenn"}
-	actionName := &utils.Name{Value: "transfer"}
-	result, resultErr := exportedFunc(receiver.ToInt64(), receiver.ToInt64(), actionName.ToInt64())
+	receiver, _ := utils.StringToName("glenn")
+	actionName, _ := utils.StringToName("transfer")
+
+	start := time.Now()
+	result, resultErr := exportedFunc.Call(c.context, receiver, receiver, actionName)
+	elapsed := time.Since(start)
+	log.Printf("Binomial took %s", elapsed)
 
 	if resultErr != nil {
 		panic(fmt.Sprintln("Execution failed: ", resultErr))

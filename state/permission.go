@@ -19,7 +19,7 @@ func (p *Permission) Satisfies(other Permission) bool {
 		return false
 	}
 
-	if p.ID == other.ID {
+	if p.ID == other.ID || p.ID == other.Parent {
 		return true
 	}
 

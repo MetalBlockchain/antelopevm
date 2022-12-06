@@ -1,56 +1,41 @@
 package wasm
 
 import (
-	"errors"
+	"bytes"
 	"fmt"
-
-	"github.com/wasmerio/wasmer-go/wasmer"
 )
 
-func EosIoAssert(context *ExecutionContext) *wasmer.Function {
-	return wasmer.NewFunction(
-		context.store,
-		wasmer.NewFunctionType(
-			wasmer.NewValueTypes(wasmer.I32, wasmer.I32),
-			wasmer.NewValueTypes(),
-		),
-		func(args []wasmer.Value) ([]wasmer.Value, error) {
-			fmt.Println("eosio_assert")
-			assertion := args[1].I32()
+func EosIoAssert(context *ExecutionContext) func(uint32, uint32) {
+	return func(arg1 uint32, arg2 uint32) {
+		fmt.Printf("eosio_assert %v %v\n", arg1, arg2)
 
-			if assertion == 0 {
-				return nil, errors.New("assertion failed")
+		if arg1 == 0 {
+			memory := context.module.Memory()
+			data, found := memory.Read(context.context, arg2, memory.Size(context.context)-arg2)
+
+			if !found {
+				panic("not foundsss")
 			}
 
-			return nil, nil
-		},
-	)
+			n := bytes.IndexByte(data, 0)
+
+			if n > 0 {
+				panic(string(data[:n]))
+			} else {
+				panic("assertion failed")
+			}
+		}
+	}
 }
 
-func Abort(context *ExecutionContext) *wasmer.Function {
-	return wasmer.NewFunction(
-		context.store,
-		wasmer.NewFunctionType(
-			wasmer.NewValueTypes(),
-			wasmer.NewValueTypes(),
-		),
-		func(args []wasmer.Value) ([]wasmer.Value, error) {
-			fmt.Println("Abort")
-			return nil, errors.New("abort requested")
-		},
-	)
+func Abort(context *ExecutionContext) func() {
+	return func() {
+		panic("abort called")
+	}
 }
 
-func AssertCode(context *ExecutionContext) *wasmer.Function {
-	return wasmer.NewFunction(
-		context.store,
-		wasmer.NewFunctionType(
-			wasmer.NewValueTypes(wasmer.I32, wasmer.I64),
-			wasmer.NewValueTypes(),
-		),
-		func(args []wasmer.Value) ([]wasmer.Value, error) {
-			fmt.Println("AssertCode")
-			return nil, errors.New("abort requested")
-		},
-	)
+func AssertCode(context *ExecutionContext) func(uint32, uint64) {
+	return func(arg1 uint32, arg2 uint64) {
+		fmt.Println("AssertCode")
+	}
 }
