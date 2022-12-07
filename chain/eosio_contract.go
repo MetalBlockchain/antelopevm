@@ -73,16 +73,14 @@ func applyEosioSetCode(context *ApplyContext) error {
 		panic(err)
 	}
 
-	//oldSize := len(account.Code) * int(context.Control.Config.SetCodeRamBytesMultiplier)
-	//newSize := codeSize * int(context.Control.Config.SetCodeRamBytesMultiplier)
-	account.LastCodeUpdate = types.TimePoint(types.Now())
-	account.CodeVersion = *codeId
+	context.Control.State.UpdateAccount(account, func(a *state.Account) {
+		a.LastCodeUpdate = types.TimePoint(types.Now())
+		a.CodeVersion = *codeId
 
-	if codeSize > 0 {
-		account.Code = act.Code
-	}
-
-	context.Control.State.UpdateAccount(account)
+		if codeSize > 0 {
+			a.Code = act.Code
+		}
+	})
 
 	utils.Assert(account.CodeVersion != *codeId, "contract is already running this version of code")
 
@@ -104,12 +102,12 @@ func applyEosioSetAbi(context *ApplyContext) error {
 		return err
 	}
 
-	if abiSize > 0 {
-		account.Abi = act.Abi
-		account.AbiSequence += 1
-	}
-
-	context.Control.State.UpdateAccount(account)
+	context.Control.State.UpdateAccount(account, func(a *state.Account) {
+		if abiSize > 0 {
+			account.Abi = act.Abi
+			account.AbiSequence += 1
+		}
+	})
 
 	return nil
 }
@@ -171,6 +169,107 @@ func applyEosioUpdateAuth(context *ApplyContext) error {
 	} else {
 		_, err := context.Control.Authorization.CreatePermission(act.Account, act.Permission, parentId, act.Auth, types.TimePoint(0))
 
+		return err
+	}
+
+	return nil
+}
+
+func applyEosioLinkAuth(context *ApplyContext) error {
+	act := LinkAuth{}
+	rlp.DecodeBytes(context.Act.Data, &act)
+
+	if act.Requirement.IsEmpty() {
+		return fmt.Errorf("required permission cannot be empty")
+	}
+
+	if err := context.RequireAuthorization(int64(act.Account)); err != nil {
+		return err
+	}
+
+	if act.Requirement != types.PermissionName(context.Control.Config.EosioAnyName) {
+		if _, err := context.Control.State.GetPermissionByOwner(act.Account, act.Requirement); err != nil {
+			return fmt.Errorf("failed to retrieve permission %s", types.S(uint64(act.Requirement)))
+		}
+	}
+
+	permissionLink, err := context.Control.State.GetPermissionLinkByActionName(act.Account, act.Code, act.Type)
+
+	if err == nil {
+		if permissionLink.RequiredPermission == act.Requirement {
+			return fmt.Errorf("attempting to update required authority, but new requirement is same as old")
+		}
+
+		if err := context.Control.State.UpdatePermissionLink(permissionLink, func(pl *state.PermissionLink) {
+			pl.RequiredPermission = act.Requirement
+		}); err != nil {
+			return err
+		}
+	} else {
+		permissionLink = &state.PermissionLink{
+			Account:            act.Account,
+			Code:               act.Code,
+			MessageType:        act.Type,
+			RequiredPermission: act.Requirement,
+		}
+
+		if err := context.Control.State.PutPermissionLink(permissionLink); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func applyEosioUnlinkAuth(context *ApplyContext) error {
+	act := UnLinkAuth{}
+	rlp.DecodeBytes(context.Act.Data, &act)
+
+	if err := context.RequireAuthorization(int64(act.Account)); err != nil {
+		return err
+	}
+
+	permissionLink, err := context.Control.State.GetPermissionLinkByActionName(act.Account, act.Code, act.Type)
+
+	if err != nil {
+		return fmt.Errorf("attempting to unlink authority, but no link found")
+	}
+
+	if err := context.Control.State.RemovePermissionLink(permissionLink); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func applyEosioDeleteAuth(context *ApplyContext) error {
+	act := DeleteAuth{}
+	rlp.DecodeBytes(context.Act.Data, &act)
+
+	if err := context.RequireAuthorization(int64(act.Account)); err != nil {
+		return err
+	}
+
+	if act.Permission == context.Control.Config.OwnerName {
+		return fmt.Errorf("cannot delete owner authority")
+	} else if act.Permission == context.Control.Config.ActiveName {
+		return fmt.Errorf("cannot delete active authority")
+	}
+
+	permission, err := context.Control.State.GetPermissionByOwner(act.Account, act.Permission)
+
+	if err != nil {
+		return fmt.Errorf("cannot remove non-existing permission")
+	}
+
+	iterator := context.Control.State.GetPermissionLinksByPermissionName(act.Account, act.Permission)
+	defer iterator.Release()
+
+	if iterator.Next() {
+		return fmt.Errorf("cannot delete a linked authority, remove the links first")
+	}
+
+	if err := context.Control.State.RemovePermission(permission); err != nil {
 		return err
 	}
 

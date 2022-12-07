@@ -1,14 +1,14 @@
 package state
 
 import (
+	"encoding/binary"
+	"fmt"
+
 	"github.com/MetalBlockchain/metalgo/cache"
 	"github.com/MetalBlockchain/metalgo/database"
+	"github.com/MetalBlockchain/metalgo/database/prefixdb"
 	"github.com/MetalBlockchain/metalgo/ids"
 	"github.com/MetalBlockchain/metalgo/snow/choices"
-)
-
-const (
-	lastAcceptedByte byte = iota
 )
 
 const (
@@ -16,14 +16,18 @@ const (
 	blockCacheSize = 8192
 )
 
-// persists lastAccepted block IDs with this key
-var lastAcceptedKey = []byte{lastAcceptedByte}
+var (
+	blockIdKey      = []byte("Block__id__")
+	blockIndexKey   = []byte("Block__byIndex__")
+	lastAcceptedKey = []byte("Block_lastAccepted")
+)
 
 var _ BlockState = &blockState{}
 
 // BlockState defines methods to manage state with Blocks and LastAcceptedIDs.
 type BlockState interface {
 	GetBlock(blkID ids.ID) (*Block, error)
+	GetBlockByIndex(uint64) (*Block, error)
 	PutBlock(blk *Block) error
 	GetLastAccepted() (ids.ID, error)
 	SetLastAccepted(ids.ID) error
@@ -34,8 +38,11 @@ type blockState struct {
 	// cache to store blocks
 	blkCache cache.Cacher
 	// block database
+	db           database.Database
 	blockDB      database.Database
+	blockIndexDB database.Database
 	lastAccepted ids.ID
+	vm           VM
 }
 
 // blkWrapper wraps the actual blk bytes and status to persist them together
@@ -45,10 +52,13 @@ type blkWrapper struct {
 }
 
 // NewBlockState returns BlockState with a new cache and given db
-func NewBlockState(db database.Database) BlockState {
+func NewBlockState(vm VM, db database.Database) BlockState {
 	return &blockState{
-		blkCache: &cache.LRU{Size: blockCacheSize},
-		blockDB:  db,
+		vm:           vm,
+		blkCache:     &cache.LRU{Size: blockCacheSize},
+		blockDB:      prefixdb.New(blockIdKey, db),
+		blockIndexDB: prefixdb.New(blockIndexKey, db),
+		db:           db,
 	}
 }
 
@@ -90,12 +100,32 @@ func (s *blockState) GetBlock(blkID ids.ID) (*Block, error) {
 	}
 
 	// initialize block with block bytes, status and vm
-	blk.Initialize(blkw.Blk, blkw.Status)
+	blk.Initialize(s.vm, blkw.Status)
 
 	// put block into cache
 	s.blkCache.Put(blkID, blk)
 
 	return blk, nil
+}
+
+func (s *blockState) GetBlockByIndex(index uint64) (*Block, error) {
+	indexValue := make([]byte, 8)
+	binary.BigEndian.PutUint64(indexValue, uint64(index))
+
+	// get block bytes from db with the blkID key
+	wrappedBytes, err := s.blockIndexDB.Get(indexValue)
+
+	if err != nil {
+		return nil, err
+	}
+
+	blkID, err := ids.ToID(wrappedBytes)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return s.GetBlock(blkID)
 }
 
 // PutBlock puts block into both database and cache
@@ -117,13 +147,23 @@ func (s *blockState) PutBlock(blk *Block) error {
 	s.blkCache.Put(blkID, blk)
 
 	// put wrapped block bytes into database
-	return s.blockDB.Put(blkID[:], wrappedBytes)
+	indexValue := make([]byte, 8)
+	binary.BigEndian.PutUint64(indexValue, uint64(blk.Index))
+
+	if err := s.blockDB.Put(blkID[:], wrappedBytes); err != nil {
+		return err
+	}
+
+	if err := s.blockIndexDB.Put(indexValue, blkID[:]); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // DeleteBlock deletes block from both cache and database
 func (s *blockState) DeleteBlock(blkID ids.ID) error {
-	s.blkCache.Put(blkID, nil)
-	return s.blockDB.Delete(blkID[:])
+	return fmt.Errorf("Who in their right mind deletes blocks?")
 }
 
 // GetLastAccepted returns last accepted block ID
@@ -134,7 +174,7 @@ func (s *blockState) GetLastAccepted() (ids.ID, error) {
 	}
 
 	// get lastAccepted bytes from database with the fixed lastAcceptedKey
-	lastAcceptedBytes, err := s.blockDB.Get(lastAcceptedKey)
+	lastAcceptedBytes, err := s.db.Get(lastAcceptedKey)
 	if err != nil {
 		return ids.ID{}, err
 	}
@@ -150,12 +190,29 @@ func (s *blockState) GetLastAccepted() (ids.ID, error) {
 
 // SetLastAccepted persists lastAccepted ID into both cache and database
 func (s *blockState) SetLastAccepted(lastAccepted ids.ID) error {
-	// if the ID in memory and the given memory are same don't do anything
 	if s.lastAccepted == lastAccepted {
 		return nil
 	}
-	// put lastAccepted ID to memory
+
 	s.lastAccepted = lastAccepted
-	// persist lastAccepted ID to database with fixed lastAcceptedKey
-	return s.blockDB.Put(lastAcceptedKey, lastAccepted[:])
+
+	return s.db.Put(lastAcceptedKey, lastAccepted[:])
+}
+
+func (s *blockState) AcceptBlock(block *Block) error {
+	block.SetStatus(choices.Accepted) // Change state of this block
+	blkID := block.ID()
+
+	// Persist data
+	if err := s.PutBlock(block); err != nil {
+		return err
+	}
+
+	// Set last accepted ID to this block ID
+	if err := s.SetLastAccepted(blkID); err != nil {
+		return err
+	}
+
+	// Commit changes to database
+	return nil
 }

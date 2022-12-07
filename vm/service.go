@@ -1,12 +1,15 @@
 package vm
 
 import (
+	"encoding/hex"
+	json2 "encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
+	"github.com/MetalBlockchain/antelopevm/chain/types"
+	"github.com/MetalBlockchain/antelopevm/vm/service"
 	"github.com/MetalBlockchain/metalgo/ids"
-	"github.com/MetalBlockchain/metalgo/utils/formatting"
-	"github.com/MetalBlockchain/metalgo/utils/json"
 )
 
 var (
@@ -18,75 +21,117 @@ var (
 // Service is the API service for this VM
 type Service struct{ vm *VM }
 
-// ProposeBlockArgs are the arguments to function ProposeValue
-type ProposeBlockArgs struct {
-	// Data in the block. Must be base 58 encoding of 32 bytes.
-	Data string `json:"data"`
+type RequestHandler struct {
+	handler func(http.ResponseWriter, *http.Request) error
 }
 
-// ProposeBlockReply is the reply from function ProposeBlock
-type ProposeBlockReply struct{ Success bool }
-
-// ProposeBlock is an API method to propose a new block whose data is [args].Data.
-// [args].Data must be a string repr. of a 32 byte array
-func (s *Service) ProposeBlock(_ *http.Request, args *ProposeBlockArgs, reply *ProposeBlockReply) error {
-	bytes, err := formatting.Decode(formatting.Hex, args.Data)
-	if err != nil || len(bytes) != dataLen {
-		return errBadData
+func NewRequestHandler(handler func(http.ResponseWriter, *http.Request) error) *RequestHandler {
+	return &RequestHandler{
+		handler: handler,
 	}
-	var data [dataLen]byte         // The data as an array of bytes
-	copy(data[:], bytes[:dataLen]) // Copy the bytes in dataSlice to data
-	s.vm.proposeBlock(data)
-	reply.Success = true
+}
+
+func (req *RequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Content-Type", "application/json;charset=UTF-8")
+
+	if err := req.handler(w, r); err != nil {
+		json2.NewEncoder(w).Encode(service.ErrorResponse{
+			Code:    400,
+			Message: err.Error(),
+		})
+	}
+}
+
+func (s *Service) GetInfo(w http.ResponseWriter, r *http.Request) error {
+	version, _ := s.vm.Version()
+	lastAcceptedId, _ := s.vm.LastAccepted()
+	lastAccepted, _ := s.vm.getBlock(lastAcceptedId)
+	info := service.NewChainInfoResponse(version, lastAccepted, s.vm.controller.ChainId)
+
+	json2.NewEncoder(w).Encode(info)
+
 	return nil
 }
 
-// GetBlockArgs are the arguments to GetBlock
-type GetBlockArgs struct {
-	// ID of the block we're getting.
-	// If left blank, gets the latest block
-	ID *ids.ID `json:"id"`
-}
+func (s *Service) GetBlock(w http.ResponseWriter, r *http.Request) error {
+	var body service.GetBlockRequest
+	json2.NewDecoder(r.Body).Decode(&body)
 
-// GetBlockReply is the reply from GetBlock
-type GetBlockReply struct {
-	Timestamp json.Uint64 `json:"timestamp"` // Timestamp of most recent block
-	Data      string      `json:"data"`      // Data in the most recent block. Base 58 repr. of 5 bytes.
-	ID        ids.ID      `json:"id"`        // String repr. of ID of the most recent block
-	ParentID  ids.ID      `json:"parentID"`  // String repr. of ID of the most recent block's parent
-}
+	if val, err := strconv.ParseUint(body.BlockNumOrId, 10, 64); err == nil {
+		block, err := s.vm.state.GetBlockByIndex(val)
 
-// GetBlock gets the block whose ID is [args.ID]
-// If [args.ID] is empty, get the latest block
-func (s *Service) GetBlock(_ *http.Request, args *GetBlockArgs, reply *GetBlockReply) error {
-	// If an ID is given, parse its string representation to an ids.ID
-	// If no ID is given, ID becomes the ID of last accepted block
-	var (
-		id  ids.ID
-		err error
-	)
-
-	if args.ID == nil {
-		id, err = s.vm.state.GetLastAccepted()
 		if err != nil {
-			return errCannotGetLastAccepted
+			w.WriteHeader(404)
+			return nil
 		}
-	} else {
-		id = *args.ID
+
+		json2.NewEncoder(w).Encode(service.NewGetBlockResponse(block))
+		return nil
 	}
 
-	// Get the block from the database
-	block, err := s.vm.getBlock(id)
+	blockHash, err := hex.DecodeString(body.BlockNumOrId)
+
 	if err != nil {
-		return errNoSuchBlock
+		w.WriteHeader(400)
+		return nil
 	}
 
-	// Fill out the response with the block's data
-	reply.ID = block.ID()
-	reply.Timestamp = json.Uint64(block.Timestamp().Unix())
-	reply.ParentID = block.Parent()
-	data := block.Data()
-	reply.Data, err = formatting.Encode(formatting.Hex, data[:])
+	blockID, err := ids.ToID(blockHash)
 
-	return err
+	if err != nil {
+		w.WriteHeader(400)
+		return nil
+	}
+
+	block, err := s.vm.state.GetBlock(blockID)
+
+	if err != nil {
+		w.WriteHeader(404)
+		return nil
+	}
+
+	json2.NewEncoder(w).Encode(service.NewGetBlockResponse(block))
+
+	return nil
+}
+
+func (s *Service) GetBlockInfo(w http.ResponseWriter, r *http.Request) error {
+	var body service.GetBlockInfoRequest
+	json2.NewDecoder(r.Body).Decode(&body)
+
+	block, err := s.vm.state.GetBlockByIndex(body.BlockNum)
+
+	if err != nil {
+		w.WriteHeader(404)
+		return nil
+	}
+
+	json2.NewEncoder(w).Encode(service.NewGetBlockInfoResponse(block))
+	return nil
+}
+
+func (s *Service) PushTransaction(w http.ResponseWriter, r *http.Request) error {
+	var trx types.PackedTransaction
+
+	if err := json2.NewDecoder(r.Body).Decode(&trx); err != nil {
+		return err
+	}
+
+	s.vm.mempool.Add(&trx)
+
+	return nil
+}
+
+func (s *Service) GetRequiredKeys(w http.ResponseWriter, r *http.Request) error {
+	var body service.RequiredKeysRequest
+	json2.NewDecoder(r.Body).Decode(&body)
+
+	data, err := s.vm.controller.Authorization.GetRequiredKeys(body.Transaction, body.AvailableKeys)
+
+	if err != nil {
+		return err
+	}
+
+	json2.NewEncoder(w).Encode(service.RequiredKeysResponse{RequiredKeys: data})
+	return nil
 }

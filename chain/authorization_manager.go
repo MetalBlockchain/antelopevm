@@ -2,6 +2,7 @@ package chain
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/MetalBlockchain/antelopevm/chain/types"
 	"github.com/MetalBlockchain/antelopevm/crypto/ecc"
@@ -64,6 +65,16 @@ func (a *AuthorizationManager) GetMinimumPermission(authorizerAccount types.Acco
 	return &linkedPermission.RequiredPermission, nil
 }
 
+func (a *AuthorizationManager) GetPermissionAuthority(level *types.PermissionLevel) (*types.Authority, error) {
+	permission, err := a.Controller.State.GetPermissionByOwner(level.Actor, level.Permission)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &permission.Auth, nil
+}
+
 func (a *AuthorizationManager) CheckAuthorization(keys []ecc.PublicKey, actions []*types.Action) error {
 	permissionsToSatisfy := make(map[types.PermissionLevel]state.Permission)
 
@@ -95,13 +106,27 @@ func (a *AuthorizationManager) CheckAuthorization(keys []ecc.PublicKey, actions 
 		}
 	}
 
-	authorityChecker := NewAuthorityChecker(keys)
+	//authorityChecker := NewAuthorityChecker(keys, nil, 16)
 
-	for _, permission := range permissionsToSatisfy {
+	/* for _, permission := range permissionsToSatisfy {
 		if !authorityChecker.Check(permission) {
 			return errPermissionNotSatisfied
 		}
-	}
+	} */
 
 	return nil
+}
+
+func (a *AuthorizationManager) GetRequiredKeys(transaction types.Transaction, keys []ecc.PublicKey) ([]ecc.PublicKey, error) {
+	checker := NewAuthorityChecker(a.GetPermissionAuthority, keys, []types.PermissionLevel{}, 16)
+
+	for _, act := range transaction.Actions {
+		for _, declaredAuth := range act.Authorization {
+			if !checker.SatisfiedPermissionLevel(declaredAuth, nil) {
+				return nil, fmt.Errorf("transaction declares authority '%s', but does not have signatures for it", declaredAuth.Actor.String())
+			}
+		}
+	}
+
+	return checker.GetUsedKeys(), nil
 }

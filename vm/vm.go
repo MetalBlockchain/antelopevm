@@ -3,9 +3,12 @@ package vm
 import (
 	"errors"
 	"fmt"
-	"net/rpc"
 	"time"
 
+	"github.com/MetalBlockchain/antelopevm/chain"
+	"github.com/MetalBlockchain/antelopevm/chain/types"
+	"github.com/MetalBlockchain/antelopevm/crypto"
+	"github.com/MetalBlockchain/antelopevm/mempool"
 	"github.com/MetalBlockchain/antelopevm/state"
 	"github.com/MetalBlockchain/metalgo/database/manager"
 	"github.com/MetalBlockchain/metalgo/ids"
@@ -16,7 +19,6 @@ import (
 	"github.com/MetalBlockchain/metalgo/snow/engine/snowman/block"
 	"github.com/MetalBlockchain/metalgo/utils"
 	"github.com/MetalBlockchain/metalgo/version"
-	"go.uber.org/zap"
 
 	log "github.com/inconshreveable/log15"
 )
@@ -28,14 +30,14 @@ const (
 
 var (
 	errNoPendingBlocks = errors.New("there is no block to propose")
-	errBadGenesisBytes = errors.New("genesis data should be bytes (max length 32)")
 	Version            = &version.Semantic{
-		Major: 1,
-		Minor: 2,
-		Patch: 6,
+		Major: 0,
+		Minor: 0,
+		Patch: 1,
 	}
 
 	_ block.ChainVM = &VM{}
+	_ state.VM      = &VM{}
 )
 
 type VM struct {
@@ -53,7 +55,7 @@ type VM struct {
 	toEngine chan<- common.Message
 
 	// Proposed pieces of data that haven't been put into a block and proposed yet
-	mempool [][dataLen]byte
+	mempool *mempool.Mempool
 
 	// Block ID --> Block
 	// Each element is a block that passed verification but
@@ -62,6 +64,15 @@ type VM struct {
 
 	// Indicates that this VM has finised bootstrapping for the chain
 	bootstrapped utils.AtomicBool
+
+	controller *chain.Controller
+	builder    BlockBuilder
+
+	stop chan struct{}
+
+	builderStop chan struct{}
+	doneBuild   chan struct{}
+	doneGossip  chan struct{}
 }
 
 // Initialize this vm
@@ -82,20 +93,25 @@ func (vm *VM) Initialize(
 	_ []*common.Fx,
 	_ common.AppSender,
 ) error {
-	version, err := vm.Version()
-	if err != nil {
-		log.Error("error initializing Timestamp VM: %v", err)
-		return err
-	}
-	log.Info("Initializing Timestamp VM", "Version", version)
+	log.Info("Initializing Antelope VM")
 
 	vm.dbManager = dbManager
 	vm.ctx = ctx
 	vm.toEngine = toEngine
 	vm.verifiedBlocks = make(map[ids.ID]*state.Block)
 
-	// Create new state
-	vm.state = state.NewState(vm.dbManager.Current().Database)
+	// Create new state and controller
+	chainId := types.ChainIdType(*crypto.NewSha256String("cf057bbfb72640471fd910bcb67639c22df9f92470936cddc1ade0e2f2e7dc4f"))
+	vm.state = state.NewState(vm, vm.dbManager.Current().Database)
+	vm.controller = chain.NewController(vm.state, chainId)
+	vm.mempool = mempool.New(100)
+	vm.builder = vm.NewBlockBuilder()
+
+	// Init channels
+	vm.stop = make(chan struct{})
+	vm.builderStop = make(chan struct{})
+	vm.doneBuild = make(chan struct{})
+	vm.doneGossip = make(chan struct{})
 
 	// Initialize genesis
 	if err := vm.initGenesis(genesisData); err != nil {
@@ -105,41 +121,44 @@ func (vm *VM) Initialize(
 	// Get last accepted
 	lastAccepted, err := vm.state.GetLastAccepted()
 	if err != nil {
+		return fmt.Errorf("failed to get last accepted block: %s", err)
+	}
+
+	log.Info("initializing last accepted block", "lastAccepted", lastAccepted)
+
+	// Build off the most recently accepted block
+	if err := vm.SetPreference(lastAccepted); err != nil {
 		return err
 	}
 
-	ctx.Log.Info("initializing last accepted block",
-		zap.Any("id", lastAccepted),
-	)
+	go vm.builder.Build()
 
-	// Build off the most recently accepted block
-	return vm.SetPreference(lastAccepted)
+	return nil
 }
 
 // Initializes Genesis if required
 func (vm *VM) initGenesis(genesisData []byte) error {
 	stateInitialized, err := vm.state.IsInitialized()
+
 	if err != nil {
 		return err
 	}
 
-	// if state is already initialized, skip init genesis.
 	if stateInitialized {
 		return nil
 	}
 
-	if len(genesisData) > dataLen {
-		return errBadGenesisBytes
-	}
+	genesisFile := chain.ParseGenesisData(genesisData)
 
-	// genesisData is a byte slice but each block contains an byte array
-	// Take the first [dataLen] bytes from genesisData and put them in an array
-	var genesisDataArr [dataLen]byte
-	copy(genesisDataArr[:], genesisData)
+	// Initialize the genesis state
+	if err := vm.controller.InitGenesis(genesisFile); err != nil {
+		return err
+	}
 
 	// Create the genesis block
 	// Timestamp of genesis block is 0. It has no parent.
-	genesisBlock, err := vm.NewBlock(ids.Empty, 0, genesisDataArr, time.Unix(0, 0))
+	genesisBlock, err := vm.NewBlock(ids.Empty, 1, genesisData, genesisFile.InitialTimeStamp)
+
 	if err != nil {
 		log.Error("error while creating genesis block: %v", err)
 		return err
@@ -170,14 +189,23 @@ func (vm *VM) initGenesis(genesisData []byte) error {
 // Keys: The path extension for this VM's API (empty in this case)
 // Values: The handler for the API
 func (vm *VM) CreateHandlers() (map[string]*common.HTTPHandler, error) {
-	server := rpc.NewServer()
-	if err := server.RegisterName(Name, &Service{vm: vm}); err != nil {
-		return nil, err
-	}
+	service := &Service{vm}
 
 	return map[string]*common.HTTPHandler{
-		"": {
-			Handler: server,
+		"/v1/chain/get_info": {
+			Handler: NewRequestHandler(service.GetInfo),
+		},
+		"/v1/chain/get_block": {
+			Handler: NewRequestHandler(service.GetBlock),
+		},
+		"/v1/chain/get_block_info": {
+			Handler: NewRequestHandler(service.GetBlockInfo),
+		},
+		"/v1/chain/get_required_keys": {
+			Handler: NewRequestHandler(service.GetRequiredKeys),
+		},
+		"/v1/chain/send_transaction": {
+			Handler: NewRequestHandler(service.PushTransaction),
 		},
 	}, nil
 }
@@ -186,70 +214,66 @@ func (vm *VM) CreateHandlers() (map[string]*common.HTTPHandler, error) {
 // Keys: The path extension for this VM's static API
 // Values: The handler for that static API
 func (vm *VM) CreateStaticHandlers() (map[string]*common.HTTPHandler, error) {
-	server := rpc.NewServer()
-	if err := server.RegisterName(Name, &StaticService{}); err != nil {
-		return nil, err
-	}
-
-	return map[string]*common.HTTPHandler{
-		"": {
-			LockOptions: common.NoLock,
-			Handler:     server,
-		},
-	}, nil
+	return nil, nil
 }
 
 // Health implements the common.VM interface
-func (vm *VM) HealthCheck() (interface{}, error) { return nil, nil }
+func (vm *VM) HealthCheck() (interface{}, error) {
+	return nil, nil
+}
 
 // BuildBlock returns a block that this vm wants to add to consensus
 func (vm *VM) BuildBlock() (snowman.Block, error) {
-	if len(vm.mempool) == 0 { // There is no block to be built
+	if vm.mempool.Len() == 0 { // There is no block to be built
 		return nil, errNoPendingBlocks
 	}
 
-	// Get the value to put in the new block
-	value := vm.mempool[0]
-	vm.mempool = vm.mempool[1:]
+	// Get transaction
+	tx := vm.mempool.Pop()
 
-	// Notify consensus engine that there are more pending data for blocks
-	// (if that is the case) when done building this block
-	if len(vm.mempool) > 0 {
-		defer vm.NotifyBlockReady()
+	// Try to run the transaction
+	signedTx, _ := tx.GetSignedTransaction()
+
+	trace, err := vm.controller.PushTransaction(*signedTx)
+
+	if err != nil {
+		return nil, fmt.Errorf("couldn't push transaction to controller: %w", err)
 	}
 
 	// Gets Preferred Block
 	preferredBlock, err := vm.getBlock(vm.preferred)
+
 	if err != nil {
 		return nil, fmt.Errorf("couldn't get preferred block: %w", err)
 	}
+
 	preferredHeight := preferredBlock.Height()
 
 	// Build the block with preferred height
-	newBlock, err := vm.NewBlock(vm.preferred, preferredHeight+1, value, time.Now())
+	newBlock, err := vm.NewBlock(vm.preferred, preferredHeight+1, []byte{1}, types.Now())
+
 	if err != nil {
 		return nil, fmt.Errorf("couldn't build block: %w", err)
 	}
 
 	// Verifies block
 	if err := newBlock.Verify(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to verify block: %s", err)
 	}
+
 	return newBlock, nil
 }
 
-// NotifyBlockReady tells the consensus engine that a new block
-// is ready to be created
-func (vm *VM) NotifyBlockReady() {
-	select {
-	case vm.toEngine <- common.PendingTxs:
-	default:
-		vm.ctx.Log.Debug("dropping message to consensus engine")
-	}
-}
-
 // GetBlock implements the snowman.ChainVM interface
-func (vm *VM) GetBlock(blkID ids.ID) (snowman.Block, error) { return vm.getBlock(blkID) }
+func (vm *VM) GetBlock(blkID ids.ID) (snowman.Block, error) {
+	block, err := vm.getBlock(blkID)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get block %s: %s", blkID, err)
+	}
+
+	return block, nil
+}
 
 func (vm *VM) getBlock(blkID ids.ID) (*state.Block, error) {
 	// If block is in memory, return it.
@@ -261,15 +285,8 @@ func (vm *VM) getBlock(blkID ids.ID) (*state.Block, error) {
 }
 
 // LastAccepted returns the block most recently accepted
-func (vm *VM) LastAccepted() (ids.ID, error) { return vm.state.GetLastAccepted() }
-
-// proposeBlock appends [data] to [p.mempool].
-// Then it notifies the consensus engine
-// that a new block is ready to be added to consensus
-// (namely, a block with data [data])
-func (vm *VM) proposeBlock(data [dataLen]byte) {
-	vm.mempool = append(vm.mempool, data)
-	vm.NotifyBlockReady()
+func (vm *VM) LastAccepted() (ids.ID, error) {
+	return vm.state.GetLastAccepted()
 }
 
 // ParseBlock parses [bytes] to a snowman.Block
@@ -287,7 +304,7 @@ func (vm *VM) ParseBlock(bytes []byte) (snowman.Block, error) {
 	}
 
 	// Initialize the block
-	block.Initialize(bytes, choices.Processing)
+	block.Initialize(vm, choices.Processing)
 
 	if blk, err := vm.getBlock(block.ID()); err == nil {
 		// If we have seen this block before, return it with the most up-to-date
@@ -303,23 +320,22 @@ func (vm *VM) ParseBlock(bytes []byte) (snowman.Block, error) {
 // - the block's parent is [parentID]
 // - the block's data is [data]
 // - the block's timestamp is [timestamp]
-func (vm *VM) NewBlock(parentID ids.ID, height uint64, data [dataLen]byte, timestamp time.Time) (*state.Block, error) {
+func (vm *VM) NewBlock(parentID ids.ID, height uint64, data []byte, timestamp types.TimePoint, trace *types.TransactionTrace) (*state.Block, error) {
 	block := &state.Block{
-		PreviousBlock: parentID,
-		Hght:          height,
-		Tmstmp:        timestamp.Unix(),
-		Dt:            data,
-	}
-
-	// Get the byte representation of the block
-	blockBytes, err := state.Codec.Marshal(state.CodecVersion, block)
-	if err != nil {
-		return nil, err
+		BlockHeader: state.BlockHeader{
+			Created:       timestamp,
+			Producer:      types.N("eosio"),
+			Confirmed:     1,
+			PreviousBlock: parentID,
+			Index:         height,
+		},
+		Transactions: []types.TransactionReceipt{},
 	}
 
 	// Initialize the block by providing it with its byte representation
 	// and a reference to this VM
-	block.Initialize(blockBytes, choices.Processing)
+	block.Initialize(vm, choices.Processing)
+
 	return block, nil
 }
 
@@ -336,6 +352,30 @@ func (vm *VM) Shutdown() error {
 func (vm *VM) SetPreference(id ids.ID) error {
 	vm.preferred = id
 	return nil
+}
+
+func (vm *VM) Verified(block *state.Block) error {
+	vm.verifiedBlocks[block.ID()] = block
+	return nil
+}
+
+func (vm *VM) Accepted(block *state.Block) error {
+	block.SetStatus(choices.Accepted) // Change state of this block
+	blkID := block.ID()
+
+	// Persist data
+	if err := vm.state.PutBlock(block); err != nil {
+		return fmt.Errorf("failed to insert block: %s", err)
+	}
+
+	if err := vm.state.SetLastAccepted(blkID); err != nil {
+		return fmt.Errorf("failed to set last accepted: %s", err)
+	}
+
+	// Delete this block from verified blocks as it's accepted
+	delete(vm.verifiedBlocks, block.ID())
+
+	return vm.state.Commit()
 }
 
 // SetState sets this VM state according to given snow.State

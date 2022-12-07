@@ -24,7 +24,7 @@ var _ AccountState = &accountState{}
 type AccountState interface {
 	GetAccountByName(types.AccountName) (*Account, error)
 	PutAccount(*Account) error
-	UpdateAccount(*Account) error
+	UpdateAccount(*Account, func(*Account)) error
 }
 
 type accountState struct {
@@ -68,9 +68,27 @@ func (s *accountState) GetAccountByName(name types.AccountName) (*Account, error
 	return s.GetAccount(wrappedBytes)
 }
 
-func (s *accountState) UpdateAccount(account *Account) error {
+func (s *accountState) UpdateAccount(account *Account, updateFunc func(*Account)) error {
 	if _, err := s.GetAccount(account.ID.ToBytes()); err != nil {
 		return err
+	}
+
+	// Perform updates
+	oldIndexKeys := getAccountIndexKeys(*account)
+	updateFunc(account)
+	newIndexKeys := getAccountIndexKeys(*account)
+	batch := s.db.NewBatch()
+
+	for _, key := range oldIndexKeys {
+		if err := batch.Delete(key); err != nil {
+			return err
+		}
+	}
+
+	for _, key := range newIndexKeys {
+		if err := batch.Put(key, account.ID.ToBytes()); err != nil {
+			return err
+		}
 	}
 
 	wrappedBytes, err := Codec.Marshal(CodecVersion, &account)
@@ -81,11 +99,11 @@ func (s *accountState) UpdateAccount(account *Account) error {
 
 	key := append(accountIdKey, account.ID.ToBytes()...)
 
-	if err = s.db.Put(key, wrappedBytes); err != nil {
+	if err = batch.Put(key, wrappedBytes); err != nil {
 		return err
 	}
 
-	return nil
+	return batch.Write()
 }
 
 func (s *accountState) PutAccount(account *Account) error {
@@ -129,4 +147,14 @@ func (s *accountState) GenerateAccountId() (uint64, error) {
 	}
 
 	return id, nil
+}
+
+func getAccountIndexKeys(account Account) map[string][]byte {
+	keys := make(map[string][]byte)
+	nameBytes, _ := account.Name.Pack()
+	byName := append(accountNameKey, nameBytes...)
+
+	keys["byName"] = byName
+
+	return keys
 }

@@ -26,6 +26,7 @@ func init() {
 		c.RegisterType(&Account{}),
 		c.RegisterType(&Permission{}),
 		c.RegisterType(&PermissionLink{}),
+		c.RegisterType(&Block{}),
 		Codec.RegisterCodec(CodecVersion, c),
 	)
 

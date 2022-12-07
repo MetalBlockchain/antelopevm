@@ -31,8 +31,37 @@ func NewController(state state.State, chainId types.ChainIdType) *Controller {
 	controller.SetApplyHandler(types.AccountName(types.N("eosio")), types.AccountName(types.N("eosio")), types.ActionName(types.N("setcode")), applyEosioSetCode)
 	controller.SetApplyHandler(types.AccountName(types.N("eosio")), types.AccountName(types.N("eosio")), types.ActionName(types.N("setabi")), applyEosioSetAbi)
 	controller.SetApplyHandler(types.AccountName(types.N("eosio")), types.AccountName(types.N("eosio")), types.ActionName(types.N("updateauth")), applyEosioUpdateAuth)
+	controller.SetApplyHandler(types.AccountName(types.N("eosio")), types.AccountName(types.N("eosio")), types.ActionName(types.N("deleteauth")), applyEosioDeleteAuth)
+	controller.SetApplyHandler(types.AccountName(types.N("eosio")), types.AccountName(types.N("eosio")), types.ActionName(types.N("linkauth")), applyEosioLinkAuth)
+	controller.SetApplyHandler(types.AccountName(types.N("eosio")), types.AccountName(types.N("eosio")), types.ActionName(types.N("unlinkauth")), applyEosioUnlinkAuth)
 
 	return controller
+}
+
+func (c *Controller) InitGenesis(config *GenesisFile) error {
+	if err := c.CreateNativeAccount(); err != nil {
+		return err
+	}
+
+	auth := types.Authority{
+		Threshold: 1,
+		Keys: []types.KeyWeight{{
+			Key:    config.InitialKey.String(),
+			Weight: 1,
+		}},
+	}
+
+	ownerPermission, err := c.Authorization.CreatePermission(c.Config.SystemAccountName, c.Config.OwnerName, types.IdType(0), auth, config.InitialTimeStamp)
+
+	if err != nil {
+		return err
+	}
+
+	if _, err := c.Authorization.CreatePermission(c.Config.SystemAccountName, c.Config.ActiveName, ownerPermission.ID, auth, config.InitialTimeStamp); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (c *Controller) CreateNativeAccount() error {
@@ -65,22 +94,31 @@ func (c *Controller) FindApplyHandler(receiver types.AccountName, scope types.Ac
 	return nil
 }
 
-func (c *Controller) PushTransaction(trx types.SignedTransaction) error {
+func (c *Controller) PushTransaction(trx types.SignedTransaction) (*types.TransactionTrace, error) {
 	// Check authority
 	keys, err := trx.GetSignatureKeys(&c.ChainId, false, true)
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if err := c.Authorization.CheckAuthorization(keys, trx.Actions); err != nil {
-		return err
+		return nil, err
 	}
 
 	trxContext := NewTransactionContext(c, &trx, trx.ID())
-	trxContext.Init()
-	trxContext.Exec()
-	trxContext.Finalize()
 
-	return nil
+	if err := trxContext.Init(); err != nil {
+		return nil, err
+	}
+
+	if err := trxContext.Exec(); err != nil {
+		return nil, err
+	}
+
+	if err := trxContext.Finalize(); err != nil {
+		return nil, err
+	}
+
+	return trxContext.Trace, nil
 }

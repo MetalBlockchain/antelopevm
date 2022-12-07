@@ -8,8 +8,9 @@ type Config struct {
 	SetCodeRamBytesMultiplier uint32
 
 	// Permissions
-	ActiveName types.PermissionName
-	OwnerName  types.PermissionName
+	ActiveName   types.PermissionName
+	OwnerName    types.PermissionName
+	EosioAnyName types.PermissionName
 }
 
 func GetDefaultConfig() *Config {
@@ -18,7 +19,8 @@ func GetDefaultConfig() *Config {
 		MaxInlineActionDepth:      4,
 		SetCodeRamBytesMultiplier: 10,
 
-		ActiveName: types.N("active"),
-		OwnerName:  types.N("owner"),
+		ActiveName:   types.N("active"),
+		OwnerName:    types.N("owner"),
+		EosioAnyName: types.N("eosio.any"),
 	}
 }
