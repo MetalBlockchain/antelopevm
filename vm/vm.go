@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -84,7 +85,8 @@ type VM struct {
 //
 // The data in the genesis block is [genesisData]
 func (vm *VM) Initialize(
-	ctx *snow.Context,
+	ctx context.Context,
+	chainCtx *snow.Context,
 	dbManager manager.Manager,
 	genesisData []byte,
 	upgradeData []byte,
@@ -96,7 +98,7 @@ func (vm *VM) Initialize(
 	log.Info("Initializing Antelope VM")
 
 	vm.dbManager = dbManager
-	vm.ctx = ctx
+	vm.ctx = chainCtx
 	vm.toEngine = toEngine
 	vm.verifiedBlocks = make(map[ids.ID]*state.Block)
 
@@ -127,7 +129,7 @@ func (vm *VM) Initialize(
 	log.Info("initializing last accepted block", "lastAccepted", lastAccepted)
 
 	// Build off the most recently accepted block
-	if err := vm.SetPreference(lastAccepted); err != nil {
+	if err := vm.SetPreference(ctx, lastAccepted); err != nil {
 		return err
 	}
 
@@ -172,7 +174,7 @@ func (vm *VM) initGenesis(genesisData []byte) error {
 
 	// Accept the genesis block
 	// Sets [vm.lastAccepted] and [vm.preferred]
-	if err := genesisBlock.Accept(); err != nil {
+	if err := genesisBlock.Accept(context.Background()); err != nil {
 		return fmt.Errorf("error accepting genesis block: %w", err)
 	}
 
@@ -188,7 +190,7 @@ func (vm *VM) initGenesis(genesisData []byte) error {
 // CreateHandlers returns a map where:
 // Keys: The path extension for this VM's API (empty in this case)
 // Values: The handler for the API
-func (vm *VM) CreateHandlers() (map[string]*common.HTTPHandler, error) {
+func (vm *VM) CreateHandlers(ctx context.Context) (map[string]*common.HTTPHandler, error) {
 	service := &Service{vm}
 
 	return map[string]*common.HTTPHandler{
@@ -213,17 +215,17 @@ func (vm *VM) CreateHandlers() (map[string]*common.HTTPHandler, error) {
 // CreateStaticHandlers returns a map where:
 // Keys: The path extension for this VM's static API
 // Values: The handler for that static API
-func (vm *VM) CreateStaticHandlers() (map[string]*common.HTTPHandler, error) {
+func (vm *VM) CreateStaticHandlers(ctx context.Context) (map[string]*common.HTTPHandler, error) {
 	return nil, nil
 }
 
 // Health implements the common.VM interface
-func (vm *VM) HealthCheck() (interface{}, error) {
+func (vm *VM) HealthCheck(ctx context.Context) (interface{}, error) {
 	return nil, nil
 }
 
 // BuildBlock returns a block that this vm wants to add to consensus
-func (vm *VM) BuildBlock() (snowman.Block, error) {
+func (vm *VM) BuildBlock(ctx context.Context) (snowman.Block, error) {
 	if vm.mempool.Len() == 0 { // There is no block to be built
 		return nil, errNoPendingBlocks
 	}
@@ -234,7 +236,7 @@ func (vm *VM) BuildBlock() (snowman.Block, error) {
 	// Try to run the transaction
 	signedTx, _ := tx.GetSignedTransaction()
 
-	trace, err := vm.controller.PushTransaction(*signedTx)
+	_, err := vm.controller.PushTransaction(*signedTx)
 
 	if err != nil {
 		return nil, fmt.Errorf("couldn't push transaction to controller: %w", err)
@@ -257,7 +259,7 @@ func (vm *VM) BuildBlock() (snowman.Block, error) {
 	}
 
 	// Verifies block
-	if err := newBlock.Verify(); err != nil {
+	if err := newBlock.Verify(context.Background()); err != nil {
 		return nil, fmt.Errorf("failed to verify block: %s", err)
 	}
 
@@ -265,7 +267,7 @@ func (vm *VM) BuildBlock() (snowman.Block, error) {
 }
 
 // GetBlock implements the snowman.ChainVM interface
-func (vm *VM) GetBlock(blkID ids.ID) (snowman.Block, error) {
+func (vm *VM) GetBlock(ctx context.Context, blkID ids.ID) (snowman.Block, error) {
 	block, err := vm.getBlock(blkID)
 
 	if err != nil {
@@ -285,7 +287,7 @@ func (vm *VM) getBlock(blkID ids.ID) (*state.Block, error) {
 }
 
 // LastAccepted returns the block most recently accepted
-func (vm *VM) LastAccepted() (ids.ID, error) {
+func (vm *VM) LastAccepted(ctx context.Context) (ids.ID, error) {
 	return vm.state.GetLastAccepted()
 }
 
@@ -293,7 +295,7 @@ func (vm *VM) LastAccepted() (ids.ID, error) {
 // This function is used by the vm's state to unmarshal blocks saved in state
 // and by the consensus layer when it receives the byte representation of a block
 // from another node
-func (vm *VM) ParseBlock(bytes []byte) (snowman.Block, error) {
+func (vm *VM) ParseBlock(ctx context.Context, bytes []byte) (snowman.Block, error) {
 	// A new empty block
 	block := &state.Block{}
 
@@ -320,7 +322,7 @@ func (vm *VM) ParseBlock(bytes []byte) (snowman.Block, error) {
 // - the block's parent is [parentID]
 // - the block's data is [data]
 // - the block's timestamp is [timestamp]
-func (vm *VM) NewBlock(parentID ids.ID, height uint64, data []byte, timestamp types.TimePoint, trace *types.TransactionTrace) (*state.Block, error) {
+func (vm *VM) NewBlock(parentID ids.ID, height uint64, data []byte, timestamp types.TimePoint) (*state.Block, error) {
 	block := &state.Block{
 		BlockHeader: state.BlockHeader{
 			Created:       timestamp,
@@ -340,7 +342,7 @@ func (vm *VM) NewBlock(parentID ids.ID, height uint64, data []byte, timestamp ty
 }
 
 // Shutdown this vm
-func (vm *VM) Shutdown() error {
+func (vm *VM) Shutdown(ctx context.Context) error {
 	if vm.state == nil {
 		return nil
 	}
@@ -349,7 +351,7 @@ func (vm *VM) Shutdown() error {
 }
 
 // SetPreference sets the block with ID [ID] as the preferred block
-func (vm *VM) SetPreference(id ids.ID) error {
+func (vm *VM) SetPreference(ctx context.Context, id ids.ID) error {
 	vm.preferred = id
 	return nil
 }
@@ -379,7 +381,7 @@ func (vm *VM) Accepted(block *state.Block) error {
 }
 
 // SetState sets this VM state according to given snow.State
-func (vm *VM) SetState(state snow.State) error {
+func (vm *VM) SetState(ctx context.Context, state snow.State) error {
 	switch state {
 	// Engine reports it's bootstrapping
 	case snow.Bootstrapping:
@@ -409,34 +411,52 @@ func (vm *VM) onNormalOperationsStarted() error {
 }
 
 // Returns this VM's version
-func (vm *VM) Version() (string, error) {
+func (vm *VM) Version(ctx context.Context) (string, error) {
 	return Version.String(), nil
 }
 
-func (vm *VM) Connected(id ids.NodeID, nodeVersion *version.Application) error {
+func (vm *VM) Connected(ctx context.Context, id ids.NodeID, nodeVersion *version.Application) error {
 	return nil // noop
 }
 
-func (vm *VM) Disconnected(id ids.NodeID) error {
+func (vm *VM) Disconnected(ctx context.Context, id ids.NodeID) error {
 	return nil // noop
 }
 
 // This VM doesn't (currently) have any app-specific messages
-func (vm *VM) AppGossip(nodeID ids.NodeID, msg []byte) error {
+func (vm *VM) AppGossip(ctx context.Context, nodeID ids.NodeID, msg []byte) error {
 	return nil
 }
 
 // This VM doesn't (currently) have any app-specific messages
-func (vm *VM) AppRequest(nodeID ids.NodeID, requestID uint32, time time.Time, request []byte) error {
+func (vm *VM) AppRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, time time.Time, request []byte) error {
 	return nil
 }
 
 // This VM doesn't (currently) have any app-specific messages
-func (vm *VM) AppResponse(nodeID ids.NodeID, requestID uint32, response []byte) error {
+func (vm *VM) AppResponse(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
 	return nil
 }
 
 // This VM doesn't (currently) have any app-specific messages
-func (vm *VM) AppRequestFailed(nodeID ids.NodeID, requestID uint32) error {
+func (vm *VM) AppRequestFailed(ctx context.Context, nodeID ids.NodeID, requestID uint32) error {
+	return nil
+}
+
+// implements "snowmanblock.ChainVM.commom.VM.AppHandler"
+func (vm *VM) CrossChainAppRequest(ctx context.Context, chainID ids.ID, requestID uint32, deadline time.Time, request []byte) error {
+	// (currently) no app-specific messages
+	return nil
+}
+
+// implements "snowmanblock.ChainVM.commom.VM.AppHandler"
+func (vm *VM) CrossChainAppRequestFailed(ctx context.Context, chainID ids.ID, requestID uint32) error {
+	// (currently) no app-specific messages
+	return nil
+}
+
+// implements "snowmanblock.ChainVM.commom.VM.AppHandler"
+func (vm *VM) CrossChainAppResponse(ctx context.Context, chainID ids.ID, requestID uint32, request []byte) error {
+	// (currently) no app-specific messages
 	return nil
 }

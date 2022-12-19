@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"context"
 	"encoding/hex"
 	json2 "encoding/json"
 	"errors"
@@ -43,8 +44,8 @@ func (req *RequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) GetInfo(w http.ResponseWriter, r *http.Request) error {
-	version, _ := s.vm.Version()
-	lastAcceptedId, _ := s.vm.LastAccepted()
+	version, _ := s.vm.Version(context.Background())
+	lastAcceptedId, _ := s.vm.LastAccepted(context.Background())
 	lastAccepted, _ := s.vm.getBlock(lastAcceptedId)
 	info := service.NewChainInfoResponse(version, lastAccepted, s.vm.controller.ChainId)
 
