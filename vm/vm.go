@@ -7,11 +7,13 @@ import (
 	"time"
 
 	"github.com/MetalBlockchain/antelopevm/chain"
-	"github.com/MetalBlockchain/antelopevm/chain/types"
+	"github.com/MetalBlockchain/antelopevm/core"
 	"github.com/MetalBlockchain/antelopevm/crypto"
 	"github.com/MetalBlockchain/antelopevm/mempool"
 	"github.com/MetalBlockchain/antelopevm/state"
+	"github.com/MetalBlockchain/metalgo/database"
 	"github.com/MetalBlockchain/metalgo/database/manager"
+	"github.com/MetalBlockchain/metalgo/database/versiondb"
 	"github.com/MetalBlockchain/metalgo/ids"
 	"github.com/MetalBlockchain/metalgo/snow"
 	"github.com/MetalBlockchain/metalgo/snow/choices"
@@ -21,6 +23,7 @@ import (
 	"github.com/MetalBlockchain/metalgo/utils"
 	"github.com/MetalBlockchain/metalgo/version"
 
+	"github.com/inconshreveable/log15"
 	log "github.com/inconshreveable/log15"
 )
 
@@ -47,7 +50,9 @@ type VM struct {
 	dbManager manager.Manager
 
 	// State of this VM
-	state state.State
+	db         database.Database
+	state      state.State
+	controller *chain.Controller
 
 	// ID of the preferred block
 	preferred ids.ID
@@ -65,9 +70,9 @@ type VM struct {
 
 	// Indicates that this VM has finised bootstrapping for the chain
 	bootstrapped utils.AtomicBool
+	builder      BlockBuilder
 
-	controller *chain.Controller
-	builder    BlockBuilder
+	chainId crypto.Sha256
 
 	stop chan struct{}
 
@@ -95,7 +100,7 @@ func (vm *VM) Initialize(
 	_ []*common.Fx,
 	_ common.AppSender,
 ) error {
-	log.Info("Initializing Antelope VM")
+	log.Info("initializing Antelope VM", "version", "0.0.1")
 
 	vm.dbManager = dbManager
 	vm.ctx = chainCtx
@@ -103,11 +108,12 @@ func (vm *VM) Initialize(
 	vm.verifiedBlocks = make(map[ids.ID]*state.Block)
 
 	// Create new state and controller
-	chainId := types.ChainIdType(*crypto.NewSha256String("cf057bbfb72640471fd910bcb67639c22df9f92470936cddc1ade0e2f2e7dc4f"))
-	vm.state = state.NewState(vm, vm.dbManager.Current().Database)
-	vm.controller = chain.NewController(vm.state, chainId)
+	vm.chainId = core.ChainIdType(*crypto.NewSha256String("cf057bbfb72640471fd910bcb67639c22df9f92470936cddc1ade0e2f2e7dc4f"))
+	vm.db = vm.dbManager.Current().Database
+	vm.state = state.NewState(vm, vm.db)
 	vm.mempool = mempool.New(100)
 	vm.builder = vm.NewBlockBuilder()
+	vm.controller = chain.NewController(vm.chainId)
 
 	// Init channels
 	vm.stop = make(chan struct{})
@@ -122,6 +128,7 @@ func (vm *VM) Initialize(
 
 	// Get last accepted
 	lastAccepted, err := vm.state.GetLastAccepted()
+
 	if err != nil {
 		return fmt.Errorf("failed to get last accepted block: %s", err)
 	}
@@ -153,13 +160,15 @@ func (vm *VM) initGenesis(genesisData []byte) error {
 	genesisFile := chain.ParseGenesisData(genesisData)
 
 	// Initialize the genesis state
-	if err := vm.controller.InitGenesis(genesisFile); err != nil {
+	controller := chain.NewController(vm.chainId)
+
+	if err := controller.InitGenesis(vm.state, genesisFile); err != nil {
 		return err
 	}
 
 	// Create the genesis block
 	// Timestamp of genesis block is 0. It has no parent.
-	genesisBlock, err := vm.NewBlock(ids.Empty, 1, genesisData, genesisFile.InitialTimeStamp)
+	genesisBlock, err := vm.NewBlock(ids.Empty, 0, []core.TransactionReceipt{}, genesisFile.InitialTimeStamp)
 
 	if err != nil {
 		log.Error("error while creating genesis block: %v", err)
@@ -209,6 +218,9 @@ func (vm *VM) CreateHandlers(ctx context.Context) (map[string]*common.HTTPHandle
 		"/v1/chain/send_transaction": {
 			Handler: NewRequestHandler(service.PushTransaction),
 		},
+		"/v1/history/get_transaction": {
+			Handler: NewRequestHandler(service.GetTransaction),
+		},
 	}, nil
 }
 
@@ -216,6 +228,7 @@ func (vm *VM) CreateHandlers(ctx context.Context) (map[string]*common.HTTPHandle
 // Keys: The path extension for this VM's static API
 // Values: The handler for that static API
 func (vm *VM) CreateStaticHandlers(ctx context.Context) (map[string]*common.HTTPHandler, error) {
+	log.Info("Creating static handlers - AntelopeVM")
 	return nil, nil
 }
 
@@ -226,42 +239,27 @@ func (vm *VM) HealthCheck(ctx context.Context) (interface{}, error) {
 
 // BuildBlock returns a block that this vm wants to add to consensus
 func (vm *VM) BuildBlock(ctx context.Context) (snowman.Block, error) {
+	log.Info("building block")
+	defer vm.builder.HandleGenerateBlock()
+
 	if vm.mempool.Len() == 0 { // There is no block to be built
 		return nil, errNoPendingBlocks
 	}
 
-	// Get transaction
-	tx := vm.mempool.Pop()
-
-	// Try to run the transaction
-	signedTx, _ := tx.GetSignedTransaction()
-
-	_, err := vm.controller.PushTransaction(*signedTx)
+	newBlock, err := state.BuildBlock(vm, vm.preferred)
 
 	if err != nil {
-		return nil, fmt.Errorf("couldn't push transaction to controller: %w", err)
-	}
-
-	// Gets Preferred Block
-	preferredBlock, err := vm.getBlock(vm.preferred)
-
-	if err != nil {
-		return nil, fmt.Errorf("couldn't get preferred block: %w", err)
-	}
-
-	preferredHeight := preferredBlock.Height()
-
-	// Build the block with preferred height
-	newBlock, err := vm.NewBlock(vm.preferred, preferredHeight+1, []byte{1}, types.Now())
-
-	if err != nil {
+		log.Error("couldn't build block", "error", err)
 		return nil, fmt.Errorf("couldn't build block: %w", err)
 	}
 
 	// Verifies block
 	if err := newBlock.Verify(context.Background()); err != nil {
+		log.Error("couldn't verify block", "error", err)
 		return nil, fmt.Errorf("failed to verify block: %s", err)
 	}
+
+	log.Info("block built successfully", "block", newBlock.ID())
 
 	return newBlock, nil
 }
@@ -300,8 +298,8 @@ func (vm *VM) ParseBlock(ctx context.Context, bytes []byte) (snowman.Block, erro
 	block := &state.Block{}
 
 	// Unmarshal the byte repr. of the block into our empty block
-	_, err := state.Codec.Unmarshal(bytes, block)
-	if err != nil {
+	if _, err := state.Codec.Unmarshal(bytes, block); err != nil {
+		log.Error("couldn't parse block", "error", err)
 		return nil, err
 	}
 
@@ -322,16 +320,16 @@ func (vm *VM) ParseBlock(ctx context.Context, bytes []byte) (snowman.Block, erro
 // - the block's parent is [parentID]
 // - the block's data is [data]
 // - the block's timestamp is [timestamp]
-func (vm *VM) NewBlock(parentID ids.ID, height uint64, data []byte, timestamp types.TimePoint) (*state.Block, error) {
+func (vm *VM) NewBlock(parentID ids.ID, height uint64, receipts []core.TransactionReceipt, timestamp core.TimePoint) (*state.Block, error) {
 	block := &state.Block{
-		BlockHeader: state.BlockHeader{
+		BlockHeader: core.BlockHeader{
 			Created:       timestamp,
-			Producer:      types.N("eosio"),
+			Producer:      core.StringToName("eosio"),
 			Confirmed:     1,
 			PreviousBlock: parentID,
 			Index:         height,
 		},
-		Transactions: []types.TransactionReceipt{},
+		Transactions: receipts,
 	}
 
 	// Initialize the block by providing it with its byte representation
@@ -350,13 +348,19 @@ func (vm *VM) Shutdown(ctx context.Context) error {
 	return vm.state.Close() // close versionDB
 }
 
+func (vm *VM) State() database.Database {
+	return vm.dbManager.Current().Database
+}
+
 // SetPreference sets the block with ID [ID] as the preferred block
 func (vm *VM) SetPreference(ctx context.Context, id ids.ID) error {
+	log15.Info("set preference", "preference", id)
 	vm.preferred = id
 	return nil
 }
 
 func (vm *VM) Verified(block *state.Block) error {
+	log.Info("verified block")
 	vm.verifiedBlocks[block.ID()] = block
 	return nil
 }
@@ -378,6 +382,44 @@ func (vm *VM) Accepted(block *state.Block) error {
 	delete(vm.verifiedBlocks, block.ID())
 
 	return vm.state.Commit()
+}
+
+func (vm *VM) Rejected(block *state.Block) error {
+	delete(vm.verifiedBlocks, block.ID())
+
+	return nil
+}
+
+func (vm *VM) GetMempool() *mempool.Mempool {
+	return vm.mempool
+}
+
+func (vm *VM) GetStoredBlock(context context.Context, blkID ids.ID) (*state.Block, error) {
+	if blk, exists := vm.verifiedBlocks[blkID]; exists {
+		return blk, nil
+	}
+
+	stBlk, err := vm.getBlock(blkID)
+
+	if err != nil {
+		log.Error("could not get stored block from DB", "id", blkID)
+		return nil, fmt.Errorf("could not get stored block")
+	}
+
+	return stBlk, nil
+}
+
+func (vm *VM) ExecuteTransaction(trx *core.PackedTransaction, vdb *versiondb.Database) (*core.TransactionReceipt, error) {
+	state := state.NewState(vm, vdb)
+	trace, err := vm.controller.PushTransaction(state, *trx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	log.Info("executed trx", "trx", trace.Receipt)
+
+	return &trace.Receipt, nil
 }
 
 // SetState sets this VM state according to given snow.State

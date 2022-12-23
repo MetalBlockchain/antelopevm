@@ -8,6 +8,7 @@ import (
 	"github.com/MetalBlockchain/metalgo/utils/logging"
 	"github.com/MetalBlockchain/metalgo/utils/ulimit"
 	"github.com/MetalBlockchain/metalgo/vms/rpcchainvm"
+	log "github.com/inconshreveable/log15"
 )
 
 func main() {
@@ -27,6 +28,8 @@ func main() {
 		fmt.Printf("failed to set fd limit correctly due to: %s", err)
 		os.Exit(1)
 	}
+
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat())))
 
 	rpcchainvm.Serve(&vm.VM{})
 }

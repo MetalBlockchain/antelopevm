@@ -1,14 +1,8 @@
-package types
+package core
 
 import "github.com/MetalBlockchain/antelopevm/crypto/ecc"
 
 type WeightType uint16
-
-type Permission struct {
-	PermName     string    `serialize:"true" json:"perm_name"`
-	Parent       string    `serialize:"true" json:"parent"`
-	RequiredAuth Authority `serialize:"true" json:"required_auth"`
-}
 
 type PermissionLevelWeight struct {
 	Permission PermissionLevel `serialize:"true" json:"permission"`
@@ -16,14 +10,8 @@ type PermissionLevelWeight struct {
 }
 
 type KeyWeight struct {
-	Key    string     `serialize:"true" json:"key"`
-	Weight WeightType `serialize:"true" json:"weight"`
-}
-
-func (k *KeyWeight) GetPublicKey() ecc.PublicKey {
-	key, _ := ecc.NewPublicKey(k.Key)
-
-	return key
+	Key    ecc.PublicKey `serialize:"true" json:"key"`
+	Weight WeightType    `serialize:"true" json:"weight"`
 }
 
 type WaitWeight struct {

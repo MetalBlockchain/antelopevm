@@ -4,7 +4,8 @@ import (
 	"container/heap"
 	"sync"
 
-	"github.com/MetalBlockchain/antelopevm/chain/types"
+	"github.com/MetalBlockchain/antelopevm/core"
+	"github.com/inconshreveable/log15"
 )
 
 type Mempool struct {
@@ -16,7 +17,7 @@ type Mempool struct {
 	// it as long as there is an unissued transaction remaining in [txs]
 	Pending chan struct{}
 	// newTxs is an array of [Tx] that are ready to be gossiped.
-	newTxs []*types.PackedTransaction
+	newTxs []*core.PackedTransaction
 }
 
 func New(maxSize int) *Mempool {
@@ -27,7 +28,8 @@ func New(maxSize int) *Mempool {
 	}
 }
 
-func (th *Mempool) Add(tx *types.PackedTransaction) bool {
+func (th *Mempool) Add(tx *core.PackedTransaction) bool {
+	log15.Info("adding tx to mempool", "tx", tx)
 	th.mu.Lock()
 	defer th.mu.Unlock()
 
@@ -46,7 +48,7 @@ func (th *Mempool) Add(tx *types.PackedTransaction) bool {
 
 	heap.Push(th.heap, &txEntry{
 		id:      unpacked.ID(),
-		created: types.Now(),
+		created: core.Now(),
 		tx:      tx,
 		index:   oldLen,
 	})
@@ -66,7 +68,7 @@ func (th *Mempool) Add(tx *types.PackedTransaction) bool {
 	return true
 }
 
-func (th *Mempool) Pop() *types.PackedTransaction { // O(log N)
+func (th *Mempool) Pop() *core.PackedTransaction { // O(log N)
 	th.mu.Lock()
 	defer th.mu.Unlock()
 
@@ -74,7 +76,7 @@ func (th *Mempool) Pop() *types.PackedTransaction { // O(log N)
 	return th.remove(item.id)
 }
 
-func (th *Mempool) Peek() *types.PackedTransaction {
+func (th *Mempool) Peek() *core.PackedTransaction {
 	th.mu.RLock()
 	defer th.mu.RUnlock()
 
@@ -91,14 +93,14 @@ func (th *Mempool) Len() int {
 }
 
 // popMin assumes the write lock is held and takes O(log N) time to run.
-func (th *Mempool) popMin() *types.PackedTransaction {
+func (th *Mempool) popMin() *core.PackedTransaction {
 	item := th.heap.items[0]
 
 	return th.remove(item.id)
 }
 
 // remove assumes the write lock is held and takes O(log N) time to run.
-func (th *Mempool) remove(id types.TransactionIdType) *types.PackedTransaction {
+func (th *Mempool) remove(id core.TransactionIdType) *core.PackedTransaction {
 	entry, ok := th.heap.Get(id)
 
 	if !ok {

@@ -3,7 +3,7 @@ package state
 import (
 	"encoding/binary"
 
-	"github.com/MetalBlockchain/antelopevm/chain/types"
+	"github.com/MetalBlockchain/antelopevm/core"
 	"github.com/MetalBlockchain/metalgo/cache"
 	"github.com/MetalBlockchain/metalgo/database"
 )
@@ -24,18 +24,18 @@ var (
 var _ PermissionState = &permissionState{}
 
 type PermissionState interface {
-	GetPermission([]byte) (*Permission, error)
-	GetPermissionByOwner(types.AccountName, types.PermissionName) (*Permission, error)
-	UpdatePermission(*Permission) error
-	PutPermission(*Permission) error
-	RemovePermission(*Permission) error
+	GetPermission([]byte) (*core.Permission, error)
+	GetPermissionByOwner(core.AccountName, core.PermissionName) (*core.Permission, error)
+	UpdatePermission(*core.Permission) error
+	PutPermission(*core.Permission) error
+	RemovePermission(*core.Permission) error
 
-	GetPermissionLink([]byte) (*PermissionLink, error)
-	GetPermissionLinkByActionName(types.AccountName, types.AccountName, types.ActionName) (*PermissionLink, error)
-	GetPermissionLinksByPermissionName(types.AccountName, types.PermissionName) database.Iterator
-	UpdatePermissionLink(*PermissionLink, func(*PermissionLink)) error
-	PutPermissionLink(*PermissionLink) error
-	RemovePermissionLink(*PermissionLink) error
+	GetPermissionLink([]byte) (*core.PermissionLink, error)
+	GetPermissionLinkByActionName(core.AccountName, core.AccountName, core.ActionName) (*core.PermissionLink, error)
+	GetPermissionLinksByPermissionName(core.AccountName, core.PermissionName) database.Iterator
+	UpdatePermissionLink(*core.PermissionLink, func(*core.PermissionLink)) error
+	PutPermissionLink(*core.PermissionLink) error
+	RemovePermissionLink(*core.PermissionLink) error
 }
 
 type permissionState struct {
@@ -50,7 +50,7 @@ func NewPermissionState(db database.Database) PermissionState {
 	}
 }
 
-func (s *permissionState) GetPermission(id []byte) (*Permission, error) {
+func (s *permissionState) GetPermission(id []byte) (*core.Permission, error) {
 	key := append(permissionIdKey, id...)
 	wrappedBytes, err := s.db.Get(key)
 
@@ -58,7 +58,7 @@ func (s *permissionState) GetPermission(id []byte) (*Permission, error) {
 		return nil, err
 	}
 
-	permission := &Permission{}
+	permission := &core.Permission{}
 
 	if _, err := Codec.Unmarshal(wrappedBytes, permission); err != nil {
 		return nil, err
@@ -67,7 +67,7 @@ func (s *permissionState) GetPermission(id []byte) (*Permission, error) {
 	return permission, nil
 }
 
-func (s *permissionState) GetPermissionByOwner(owner types.AccountName, name types.PermissionName) (*Permission, error) {
+func (s *permissionState) GetPermissionByOwner(owner core.AccountName, name core.PermissionName) (*core.Permission, error) {
 	nameBytes, _ := name.Pack()
 	ownerBytes, _ := owner.Pack()
 	byOwnerKey := append(permissionOwnerKey, ownerBytes...)
@@ -82,7 +82,7 @@ func (s *permissionState) GetPermissionByOwner(owner types.AccountName, name typ
 	return s.GetPermission(wrappedBytes)
 }
 
-func (s *permissionState) UpdatePermission(perm *Permission) error {
+func (s *permissionState) UpdatePermission(perm *core.Permission) error {
 	if _, err := s.GetPermission(perm.ID.ToBytes()); err != nil {
 		return err
 	}
@@ -102,7 +102,7 @@ func (s *permissionState) UpdatePermission(perm *Permission) error {
 	return nil
 }
 
-func (s *permissionState) PutPermission(perm *Permission) error {
+func (s *permissionState) PutPermission(perm *core.Permission) error {
 	wrappedBytes, err := Codec.Marshal(CodecVersion, &perm)
 
 	if err != nil {
@@ -117,7 +117,7 @@ func (s *permissionState) PutPermission(perm *Permission) error {
 		return err
 	}
 
-	perm.ID = types.IdType(id)
+	perm.ID = core.IdType(id)
 	batch := s.db.NewBatch()
 
 	key := append(permissionIdKey, perm.ID.ToBytes()...)
@@ -141,7 +141,7 @@ func (s *permissionState) PutPermission(perm *Permission) error {
 	return batch.Write()
 }
 
-func (s *permissionState) RemovePermission(perm *Permission) error {
+func (s *permissionState) RemovePermission(perm *core.Permission) error {
 	if _, err := s.GetPermission(perm.ID.ToBytes()); err != nil {
 		return err
 	}
@@ -182,7 +182,7 @@ func (s *permissionState) GeneratePermissionId() (uint64, error) {
 	return id, nil
 }
 
-func (s *permissionState) GetPermissionLink(id []byte) (*PermissionLink, error) {
+func (s *permissionState) GetPermissionLink(id []byte) (*core.PermissionLink, error) {
 	key := append(permissionLinkIdKey, id...)
 	wrappedBytes, err := s.db.Get(key)
 
@@ -190,7 +190,7 @@ func (s *permissionState) GetPermissionLink(id []byte) (*PermissionLink, error) 
 		return nil, err
 	}
 
-	link := &PermissionLink{}
+	link := &core.PermissionLink{}
 
 	if _, err := Codec.Unmarshal(wrappedBytes, link); err != nil {
 		return nil, err
@@ -199,7 +199,7 @@ func (s *permissionState) GetPermissionLink(id []byte) (*PermissionLink, error) 
 	return link, nil
 }
 
-func (s *permissionState) GetPermissionLinkByActionName(account types.AccountName, code types.AccountName, messageType types.ActionName) (*PermissionLink, error) {
+func (s *permissionState) GetPermissionLinkByActionName(account core.AccountName, code core.AccountName, messageType core.ActionName) (*core.PermissionLink, error) {
 	accountBytes, _ := account.Pack()
 	codeBytes, _ := code.Pack()
 	messageTypeBytes, _ := messageType.Pack()
@@ -217,7 +217,7 @@ func (s *permissionState) GetPermissionLinkByActionName(account types.AccountNam
 	return s.GetPermissionLink(wrappedBytes)
 }
 
-func (s *permissionState) GetPermissionLinksByPermissionName(account types.AccountName, permission types.PermissionName) database.Iterator {
+func (s *permissionState) GetPermissionLinksByPermissionName(account core.AccountName, permission core.PermissionName) database.Iterator {
 	accountBytes, _ := account.Pack()
 	requiredPermissionBytes, _ := permission.Pack()
 	byPermissionName := append(permissionLinkPermissionNameKey, accountBytes...)
@@ -229,7 +229,7 @@ func (s *permissionState) GetPermissionLinksByPermissionName(account types.Accou
 	return iterator
 }
 
-func (s *permissionState) UpdatePermissionLink(link *PermissionLink, updateFunc func(*PermissionLink)) error {
+func (s *permissionState) UpdatePermissionLink(link *core.PermissionLink, updateFunc func(*core.PermissionLink)) error {
 	if _, err := s.GetPermissionLink(link.ID.ToBytes()); err != nil {
 		return err
 	}
@@ -267,7 +267,7 @@ func (s *permissionState) UpdatePermissionLink(link *PermissionLink, updateFunc 
 	return batch.Write()
 }
 
-func (s *permissionState) RemovePermissionLink(link *PermissionLink) error {
+func (s *permissionState) RemovePermissionLink(link *core.PermissionLink) error {
 	if _, err := s.GetPermissionLink(link.ID.ToBytes()); err != nil {
 		return err
 	}
@@ -291,14 +291,14 @@ func (s *permissionState) RemovePermissionLink(link *PermissionLink) error {
 	return batch.Write()
 }
 
-func (s *permissionState) PutPermissionLink(link *PermissionLink) error {
+func (s *permissionState) PutPermissionLink(link *core.PermissionLink) error {
 	id, err := s.GeneratePermissionLinkId()
 
 	if err != nil {
 		return err
 	}
 
-	link.ID = types.IdType(id)
+	link.ID = core.IdType(id)
 
 	wrappedBytes, err := Codec.Marshal(CodecVersion, &link)
 
@@ -337,7 +337,7 @@ func (s *permissionState) GeneratePermissionLinkId() (uint64, error) {
 	return id, nil
 }
 
-func getPermissionIndexKeys(perm Permission) map[string][]byte {
+func getPermissionIndexKeys(perm core.Permission) map[string][]byte {
 	keys := make(map[string][]byte)
 	nameBytes, _ := perm.Name.Pack()
 	ownerBytes, _ := perm.Owner.Pack()
@@ -360,7 +360,7 @@ func getPermissionIndexKeys(perm Permission) map[string][]byte {
 	return keys
 }
 
-func getPermissionLinkIndexKeys(link PermissionLink) map[string][]byte {
+func getPermissionLinkIndexKeys(link core.PermissionLink) map[string][]byte {
 	keys := make(map[string][]byte)
 	accountBytes, _ := link.Account.Pack()
 	codeBytes, _ := link.Code.Pack()

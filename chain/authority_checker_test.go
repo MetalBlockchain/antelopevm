@@ -3,7 +3,7 @@ package chain
 import (
 	"testing"
 
-	"github.com/MetalBlockchain/antelopevm/chain/types"
+	"github.com/MetalBlockchain/antelopevm/core"
 	"github.com/MetalBlockchain/antelopevm/crypto/ecc"
 	"github.com/stretchr/testify/assert"
 )
@@ -12,19 +12,19 @@ func TestAuthPermissionLevelKeyWeight(t *testing.T) {
 	privateKey, _ := ecc.NewRandomPrivateKey()
 	keys := make([]ecc.PublicKey, 0)
 	keys = append(keys, privateKey.PublicKey())
-	permissions := make([]types.PermissionLevel, 0)
-	permissionToAuthority := func(*types.PermissionLevel) (*types.Authority, error) {
-		return &types.Authority{
+	permissions := make([]core.PermissionLevel, 0)
+	permissionToAuthority := func(*core.PermissionLevel) (*core.Authority, error) {
+		return &core.Authority{
 			Threshold: 1,
-			Keys: []types.KeyWeight{{
-				Key:    privateKey.PublicKey().String(),
+			Keys: []core.KeyWeight{{
+				Key:    privateKey.PublicKey(),
 				Weight: 1,
 			}},
 		}, nil
 	}
 	checker := NewAuthorityChecker(permissionToAuthority, keys, permissions, 16)
 
-	ok := checker.SatisfiedPermissionLevel(types.PermissionLevel{types.N("glenn"), 1}, nil)
+	ok := checker.SatisfiedPermissionLevel(core.PermissionLevel{core.StringToName("glenn"), 1}, nil)
 	assert.Equal(t, ok, true, "should be ok")
 }
 
@@ -32,28 +32,28 @@ func TestAuthPermissionLevelAccountWeight(t *testing.T) {
 	privateKey, _ := ecc.NewRandomPrivateKey()
 	keys := make([]ecc.PublicKey, 0)
 	keys = append(keys, privateKey.PublicKey())
-	permissions := make([]types.PermissionLevel, 0)
-	permissionToAuthority := func(a *types.PermissionLevel) (*types.Authority, error) {
+	permissions := make([]core.PermissionLevel, 0)
+	permissionToAuthority := func(a *core.PermissionLevel) (*core.Authority, error) {
 		if a.Actor.String() == "joe" {
-			return &types.Authority{
+			return &core.Authority{
 				Threshold: 1,
-				Keys: []types.KeyWeight{{
-					Key:    privateKey.PublicKey().String(),
+				Keys: []core.KeyWeight{{
+					Key:    privateKey.PublicKey(),
 					Weight: 1,
 				}},
 			}, nil
 		}
 
-		return &types.Authority{
+		return &core.Authority{
 			Threshold: 1,
-			Accounts: []types.PermissionLevelWeight{{
-				Permission: types.PermissionLevel{types.N("joe"), 1},
+			Accounts: []core.PermissionLevelWeight{{
+				Permission: core.PermissionLevel{core.StringToName("joe"), 1},
 				Weight:     1,
 			}},
 		}, nil
 	}
 	checker := NewAuthorityChecker(permissionToAuthority, keys, permissions, 16)
 
-	ok := checker.SatisfiedPermissionLevel(types.PermissionLevel{types.N("glenn"), 1}, nil)
+	ok := checker.SatisfiedPermissionLevel(core.PermissionLevel{core.StringToName("glenn"), 1}, nil)
 	assert.Equal(t, ok, true, "should be ok")
 }

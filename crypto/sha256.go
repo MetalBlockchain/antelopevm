@@ -11,7 +11,7 @@ import (
 )
 
 type Sha256 struct {
-	Hash [4]uint64 `eos:"array"`
+	Hash [4]uint64 `serialize:"true" eos:"array"`
 }
 
 func NewSha256() hash.Hash {

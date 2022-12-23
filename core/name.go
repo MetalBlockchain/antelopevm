@@ -1,4 +1,4 @@
-package types
+package core
 
 import (
 	"encoding/binary"
@@ -18,7 +18,7 @@ type TableName = Name
 type ScopeName = Name
 
 func (n Name) String() string {
-	return S(uint64(n))
+	return NameToString(uint64(n))
 }
 
 func (n Name) IsEmpty() bool {
@@ -33,7 +33,7 @@ func (n Name) Pack() ([]byte, error) {
 
 func (n *Name) Unpack(in []byte) (rlp.Unpack, error) {
 	if len(in) < 8 {
-		return nil, fmt.Errorf("rlp: uint64 required [%d] bytes, remaining [%d]", 8, len(in))
+		return nil, fmt.Errorf("rlp: uint64 required a number of [%d] bytes, remaining [%d]", 8, len(in))
 	}
 
 	data := in[:8]
@@ -59,7 +59,7 @@ func (n Name) Empty() bool {
 }
 
 func (n Name) MarshalJSON() ([]byte, error) {
-	return json.Marshal(S(uint64(n)))
+	return json.Marshal(NameToString(uint64(n)))
 }
 
 func (n *Name) UnmarshalJSON(data []byte) error {
@@ -68,12 +68,12 @@ func (n *Name) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-	*n = Name(N(s))
+	*n = StringToName(s)
 	return nil
 }
 
 // N converts a base32 string to a uint64. 64-bit unsigned integer representation of the name.
-func N(s string) Name {
+func StringToName(s string) Name {
 	var i uint32
 	var val uint64
 	sLen := uint32(len(s))
@@ -100,7 +100,7 @@ func N(s string) Name {
 }
 
 // S converts a uint64 to a base32 string. String representation of the name.
-func S(in uint64) string {
+func NameToString(in uint64) string {
 	a := []byte{'.', '.', '.', '.', '.', '.', '.', '.', '.', '.', '.', '.', '.'}
 
 	tmp := in

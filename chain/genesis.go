@@ -3,15 +3,15 @@ package chain
 import (
 	"encoding/json"
 
-	"github.com/MetalBlockchain/antelopevm/chain/types"
+	"github.com/MetalBlockchain/antelopevm/core"
 	"github.com/MetalBlockchain/antelopevm/crypto"
 	"github.com/MetalBlockchain/antelopevm/crypto/ecc"
 )
 
 type GenesisFile struct {
-	InitialTimeStamp     types.TimePoint `json:"initial_timestamp"`
-	InitialKey           ecc.PublicKey   `json:"initial_key"`
-	InitialConfiguration GenesisConfig   `json:"initial_configuration"`
+	InitialTimeStamp     core.TimePoint `json:"initial_timestamp"`
+	InitialKey           ecc.PublicKey  `json:"initial_key"`
+	InitialConfiguration GenesisConfig  `json:"initial_configuration"`
 }
 
 type GenesisConfig struct {
@@ -35,8 +35,8 @@ type GenesisConfig struct {
 	MaxRamSize                          uint32 `json:"max_ram_size"`
 }
 
-func (g *GenesisFile) GetChainId() types.ChainIdType {
-	return types.ChainIdType(*crypto.Hash256(g))
+func (g *GenesisFile) GetChainId() core.ChainIdType {
+	return core.ChainIdType(*crypto.Hash256(g))
 }
 
 func ParseGenesisData(data []byte) *GenesisFile {

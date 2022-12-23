@@ -3,13 +3,14 @@ package chain
 import (
 	"fmt"
 
-	"github.com/MetalBlockchain/antelopevm/chain/types"
+	"github.com/MetalBlockchain/antelopevm/core"
 	"github.com/MetalBlockchain/antelopevm/crypto"
 	"github.com/MetalBlockchain/antelopevm/state"
+	"github.com/inconshreveable/log15"
 )
 
 type Notified struct {
-	Receiver      types.AccountName
+	Receiver      core.AccountName
 	ActionOrdinal int
 }
 
@@ -19,9 +20,9 @@ type ApplyContext struct {
 	RecurseDepth               uint32
 	FirstReceiverActionOrdinal int
 	ActionOrdinal              int
-	Trace                      *types.ActionTrace
-	Act                        *types.Action
-	Receiver                   types.AccountName
+	Trace                      *core.ActionTrace
+	Act                        *core.Action
+	Receiver                   core.AccountName
 	ContextFree                bool
 
 	Privileged         bool
@@ -29,6 +30,9 @@ type ApplyContext struct {
 	Notified           []Notified
 	InlineActions      []int
 	CfaInlineActions   []int
+
+	State         state.State
+	Authorization *AuthorizationManager
 	//AccountRamDeltas   []types.AccountDelta
 }
 
@@ -52,6 +56,9 @@ func NewApplyContext(trxContext *TransactionContext, actionOrdinal int, recurseD
 		ContextFree:        trace.ContextFree,
 		Privileged:         false,
 		UsedContestFreeApi: false,
+
+		State:         trxContext.State,
+		Authorization: &trxContext.AuthorizationManager,
 	}
 
 	return applyContext, nil
@@ -97,8 +104,8 @@ func (a *ApplyContext) Exec() error {
 }
 
 func (a *ApplyContext) execOne() error {
-	start := types.Now()
-	receiverAccount, _ := a.Control.State.GetAccountByName(a.Receiver)
+	start := core.Now()
+	receiverAccount, _ := a.State.GetAccountByName(a.Receiver)
 	a.Privileged = receiverAccount.Privileged
 
 	if !a.ContextFree {
@@ -106,100 +113,94 @@ func (a *ApplyContext) execOne() error {
 
 		if native != nil {
 			if err := native(a); err != nil {
+				log15.Error("failed to exec native", "error", err)
 				return err
 			}
 		}
 	}
 
 	trace, _ := a.TrxContext.GetActionTrace(a.ActionOrdinal)
-	recvSequence, err := a.NextRecvSequence(receiverAccount)
-
-	if err != nil {
-		return err
-	}
-
-	receipt := types.ActionReceipt{
+	recvSequence := a.NextRecvSequence(receiverAccount)
+	receipt := core.ActionReceipt{
 		Receiver:       a.Receiver,
 		ActDigest:      *crypto.Hash256(a.Act),
 		GlobalSequence: 1,
 		RecvSequence:   recvSequence,
-		AuthSequence:   make(map[types.AccountName]uint64),
+		AuthSequence:   make(core.AuthSequenceSet, 0),
 	}
 
-	var firstReceiverAccount *state.Account
+	var firstReceiverAccount *core.Account
+	var err error
 
 	if a.Act.Account == receiverAccount.Name {
 		firstReceiverAccount = receiverAccount
 	} else {
-		firstReceiverAccount, err = a.Control.State.GetAccountByName(a.Act.Account)
+		firstReceiverAccount, err = a.State.GetAccountByName(a.Act.Account)
 
 		if err != nil {
 			return err
 		}
 	}
 
-	receipt.CodeSequence = types.Vuint32(firstReceiverAccount.CodeSequence)
-	receipt.AbiSequence = types.Vuint32(firstReceiverAccount.AbiSequence)
+	receipt.CodeSequence = core.Vuint32(firstReceiverAccount.CodeSequence)
+	receipt.AbiSequence = core.Vuint32(firstReceiverAccount.AbiSequence)
 
 	for _, k := range a.Act.Authorization {
-		receipt.AuthSequence[k.Actor], err = a.NextAuthSequence(k.Actor)
-
-		if err != nil {
-			return err
-		}
+		receipt.AuthSequence.Set(k.Actor, a.NextAuthSequence(k.Actor))
 	}
 
 	trace.Receipt = receipt
+	a.TrxContext.ExecutedActionReceiptDigests = append(a.TrxContext.ExecutedActionReceiptDigests, receipt.Digest())
 
 	a.FinalizeTrace(trace, start)
 
 	return nil
 }
 
-func (a *ApplyContext) FinalizeTrace(trace *types.ActionTrace, start types.TimePoint) {
-	trace.Elapsed = uint64(types.Now() - start)
+func (a *ApplyContext) FinalizeTrace(trace *core.ActionTrace, start core.TimePoint) {
+	trace.Elapsed = uint64(core.Now() - start)
 }
 
 func (a *ApplyContext) RequireAuthorization(account int64) error {
 	for _, v := range a.Act.Authorization {
-		if v.Actor == types.AccountName(account) {
+		if v.Actor == core.AccountName(account) {
 			return nil
 		}
 	}
 
-	return fmt.Errorf("missing authority of %s", types.S(uint64(account)))
+	return fmt.Errorf("missing authority of %s", core.NameToString(uint64(account)))
 }
 
 func (a *ApplyContext) IncrementActionId() {
 	a.TrxContext.ActionId += 1
 }
 
-func (a *ApplyContext) NextRecvSequence(account *state.Account) (uint64, error) {
-	err := a.Control.State.UpdateAccount(account, func(ra *state.Account) {
+func (a *ApplyContext) NextRecvSequence(account *core.Account) uint64 {
+	err := a.State.UpdateAccount(account, func(ra *core.Account) {
 		ra.RecvSequence += 1
 	})
 
 	if err != nil {
-		return 0, err
+		panic(err)
 	}
 
-	return account.RecvSequence, nil
+	return account.RecvSequence
 }
 
-func (a *ApplyContext) NextAuthSequence(accountName types.AccountName) (uint64, error) {
-	account, err := a.Control.State.GetAccountByName(accountName)
+func (a *ApplyContext) NextAuthSequence(accountName core.AccountName) uint64 {
+	account, err := a.State.GetAccountByName(accountName)
 
 	if err != nil {
-		return 0, err
+		panic(err)
 	}
 
-	err = a.Control.State.UpdateAccount(account, func(ra *state.Account) {
+	err = a.State.UpdateAccount(account, func(ra *core.Account) {
 		ra.AuthSequence += 1
 	})
 
 	if err != nil {
-		return 0, err
+		panic(err)
 	}
 
-	return account.AuthSequence, nil
+	return account.AuthSequence
 }

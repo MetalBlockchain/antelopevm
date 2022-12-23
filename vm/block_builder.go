@@ -51,6 +51,10 @@ func (b *BlockBuilder) Build() {
 	}
 }
 
+func (b *BlockBuilder) HandleGenerateBlock() {
+	b.status = dontBuild
+}
+
 func (b *BlockBuilder) signalTxsReady() {
 	b.l.Lock()
 	defer b.l.Unlock()

@@ -23,8 +23,8 @@ type innerPublicKey interface {
 }
 
 type PublicKey struct {
-	Curve   CurveID
-	Content [33]byte
+	Curve   CurveID  `serialize:"true" json:"key"`
+	Content [33]byte `serialize:"true" json:"key"`
 
 	inner innerPublicKey
 }

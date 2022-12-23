@@ -1,6 +1,7 @@
 package state
 
 import (
+	"github.com/MetalBlockchain/antelopevm/core"
 	"github.com/MetalBlockchain/metalgo/codec"
 	"github.com/MetalBlockchain/metalgo/codec/linearcodec"
 	"github.com/MetalBlockchain/metalgo/utils/wrappers"
@@ -23,10 +24,11 @@ func init() {
 
 	errs := wrappers.Errs{}
 	errs.Add(
-		c.RegisterType(&Account{}),
-		c.RegisterType(&Permission{}),
-		c.RegisterType(&PermissionLink{}),
+		c.RegisterType(&core.Account{}),
+		c.RegisterType(&core.Permission{}),
+		c.RegisterType(&core.PermissionLink{}),
 		c.RegisterType(&Block{}),
+		c.RegisterType(&core.TransactionTrace{}),
 		Codec.RegisterCodec(CodecVersion, c),
 	)
 

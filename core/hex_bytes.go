@@ -1,4 +1,4 @@
-package types
+package core
 
 import (
 	"encoding/hex"
@@ -24,4 +24,8 @@ func (t *HexBytes) UnmarshalJSON(data []byte) (err error) {
 
 	*t, err = hex.DecodeString(s)
 	return
+}
+
+func (t HexBytes) HexString() string {
+	return hex.EncodeToString(t)
 }

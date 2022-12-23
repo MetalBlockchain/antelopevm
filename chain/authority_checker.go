@@ -1,7 +1,7 @@
 package chain
 
 import (
-	"github.com/MetalBlockchain/antelopevm/chain/types"
+	"github.com/MetalBlockchain/antelopevm/core"
 	"github.com/MetalBlockchain/antelopevm/crypto/ecc"
 )
 
@@ -13,18 +13,18 @@ const (
 	PermissionSatisfied
 )
 
-type PermissionCacheType = map[types.PermissionLevel]PermissionCacheStatus
-type PermissionToAuthorityFunc func(*types.PermissionLevel) (*types.Authority, error)
+type PermissionCacheType = map[core.PermissionLevel]PermissionCacheStatus
+type PermissionToAuthorityFunc func(*core.PermissionLevel) (*core.Authority, error)
 
 type AuthorityChecker struct {
 	PermissionToAuthority PermissionToAuthorityFunc
 	ProvidedKeys          []ecc.PublicKey
-	ProvidedPermissions   []types.PermissionLevel
+	ProvidedPermissions   []core.PermissionLevel
 	UsedKeys              map[int]bool
 	RecursionDepthLimit   uint16
 }
 
-func NewAuthorityChecker(permissionToAuthority PermissionToAuthorityFunc, keys []ecc.PublicKey, providedPermissions []types.PermissionLevel, recursionDepthLimit uint16) *AuthorityChecker {
+func NewAuthorityChecker(permissionToAuthority PermissionToAuthorityFunc, keys []ecc.PublicKey, providedPermissions []core.PermissionLevel, recursionDepthLimit uint16) *AuthorityChecker {
 	return &AuthorityChecker{
 		PermissionToAuthority: permissionToAuthority,
 		ProvidedKeys:          keys,
@@ -34,7 +34,7 @@ func NewAuthorityChecker(permissionToAuthority PermissionToAuthorityFunc, keys [
 	}
 }
 
-func (ac *AuthorityChecker) SatisfiedPermissionLevel(permission types.PermissionLevel, cachedPerms *PermissionCacheType) bool {
+func (ac *AuthorityChecker) SatisfiedPermissionLevel(permission core.PermissionLevel, cachedPerms *PermissionCacheType) bool {
 	cachedPermissions := make(PermissionCacheType)
 
 	if cachedPerms == nil {
@@ -43,10 +43,10 @@ func (ac *AuthorityChecker) SatisfiedPermissionLevel(permission types.Permission
 
 	visitor := NewWeightTallyVisitor(ac, cachedPerms, 0)
 
-	return (visitor.Visit(types.PermissionLevelWeight{Permission: permission, Weight: 1}) > 0)
+	return (visitor.Visit(core.PermissionLevelWeight{Permission: permission, Weight: 1}) > 0)
 }
 
-func (ac *AuthorityChecker) SatisfiedAuthority(authority *types.Authority, cachedPerms *PermissionCacheType) bool {
+func (ac *AuthorityChecker) SatisfiedAuthority(authority *core.Authority, cachedPerms *PermissionCacheType) bool {
 	cachedPermissions := make(PermissionCacheType)
 
 	if cachedPerms == nil {
@@ -56,7 +56,7 @@ func (ac *AuthorityChecker) SatisfiedAuthority(authority *types.Authority, cache
 	return ac.satisfiedAuthority(authority, cachedPerms, 0)
 }
 
-func (ac *AuthorityChecker) satisfiedAuthority(authority *types.Authority, cachedPerms *PermissionCacheType, depth uint16) bool {
+func (ac *AuthorityChecker) satisfiedAuthority(authority *core.Authority, cachedPerms *PermissionCacheType, depth uint16) bool {
 	permissions := make(MetaPermission, 0)
 
 	for _, key := range authority.Keys {
@@ -81,7 +81,7 @@ func (ac *AuthorityChecker) satisfiedAuthority(authority *types.Authority, cache
 	return false
 }
 
-func (ac *AuthorityChecker) PermissionStatusInCache(permissions PermissionCacheType, level *types.PermissionLevel) PermissionCacheStatus {
+func (ac *AuthorityChecker) PermissionStatusInCache(permissions PermissionCacheType, level *core.PermissionLevel) PermissionCacheStatus {
 	value, ok := permissions[*level]
 
 	if ok {
@@ -150,10 +150,10 @@ func NewWeightTallyVisitor(checker *AuthorityChecker, cachedPermissions *Permiss
 
 func (w *WeightTallyVisitor) Visit(permission interface{}) uint32 {
 	switch v := permission.(type) {
-	case types.KeyWeight:
+	case core.KeyWeight:
 		w.VisitKeyWeight(v)
 		return w.TotalWeight
-	case types.PermissionLevelWeight:
+	case core.PermissionLevelWeight:
 		w.VisitPermissionLevelWeight(v)
 		return w.TotalWeight
 	default:
@@ -161,11 +161,9 @@ func (w *WeightTallyVisitor) Visit(permission interface{}) uint32 {
 	}
 }
 
-func (w *WeightTallyVisitor) VisitKeyWeight(permission types.KeyWeight) uint32 {
+func (w *WeightTallyVisitor) VisitKeyWeight(permission core.KeyWeight) uint32 {
 	for i, key := range w.Checker.ProvidedKeys {
-		publicKey, _ := ecc.NewPublicKey(permission.Key)
-
-		if key.Compare(publicKey) {
+		if key.Compare(permission.Key) {
 			w.Checker.UsedKeys[i] = true
 			w.TotalWeight += uint32(permission.Weight)
 			break
@@ -175,7 +173,7 @@ func (w *WeightTallyVisitor) VisitKeyWeight(permission types.KeyWeight) uint32 {
 	return w.TotalWeight
 }
 
-func (w *WeightTallyVisitor) VisitPermissionLevelWeight(permission types.PermissionLevelWeight) uint32 {
+func (w *WeightTallyVisitor) VisitPermissionLevelWeight(permission core.PermissionLevelWeight) uint32 {
 	status := w.Checker.PermissionStatusInCache(*w.CachedPermissions, &permission.Permission)
 
 	if status == BeingEvaluated {
@@ -214,18 +212,18 @@ func (m MetaPermission) Less(i, j int) bool {
 	iType, jType := 0, 0
 	iWeight, jWeight := uint16(0), uint16(0)
 	switch v := m[i].(type) {
-	case types.KeyWeight:
+	case core.KeyWeight:
 		iWeight = uint16(v.Weight)
 		iType = 2
-	case types.PermissionLevelWeight:
+	case core.PermissionLevelWeight:
 		iWeight = uint16(v.Weight)
 		iType = 3
 	}
 	switch v := m[j].(type) {
-	case types.KeyWeight:
+	case core.KeyWeight:
 		jWeight = uint16(v.Weight)
 		iType = 2
-	case types.PermissionLevelWeight:
+	case core.PermissionLevelWeight:
 		jWeight = uint16(v.Weight)
 		iType = 3
 	}

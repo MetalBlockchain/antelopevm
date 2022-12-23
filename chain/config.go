@@ -1,26 +1,26 @@
 package chain
 
-import "github.com/MetalBlockchain/antelopevm/chain/types"
+import "github.com/MetalBlockchain/antelopevm/core"
 
 type Config struct {
-	SystemAccountName         types.AccountName
+	SystemAccountName         core.AccountName
 	MaxInlineActionDepth      uint16
 	SetCodeRamBytesMultiplier uint32
 
 	// Permissions
-	ActiveName   types.PermissionName
-	OwnerName    types.PermissionName
-	EosioAnyName types.PermissionName
+	ActiveName   core.PermissionName
+	OwnerName    core.PermissionName
+	EosioAnyName core.PermissionName
 }
 
 func GetDefaultConfig() *Config {
 	return &Config{
-		SystemAccountName:         types.N("eosio"),
+		SystemAccountName:         core.StringToName("eosio"),
 		MaxInlineActionDepth:      4,
 		SetCodeRamBytesMultiplier: 10,
 
-		ActiveName:   types.N("active"),
-		OwnerName:    types.N("owner"),
-		EosioAnyName: types.N("eosio.any"),
+		ActiveName:   core.StringToName("active"),
+		OwnerName:    core.StringToName("owner"),
+		EosioAnyName: core.StringToName("eosio.any"),
 	}
 }

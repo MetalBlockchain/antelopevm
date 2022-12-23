@@ -3,26 +3,26 @@ package mempool
 import (
 	"fmt"
 
-	"github.com/MetalBlockchain/antelopevm/chain/types"
+	"github.com/MetalBlockchain/antelopevm/core"
 )
 
 type txEntry struct {
-	id      types.TransactionIdType
-	tx      *types.PackedTransaction
-	created types.TimePoint
+	id      core.TransactionIdType
+	tx      *core.PackedTransaction
+	created core.TimePoint
 	index   int
 }
 
 // txHeap is used to track pending transactions by [price]
 type txHeap struct {
 	items  []*txEntry
-	lookup map[types.TransactionIdType]*txEntry
+	lookup map[core.TransactionIdType]*txEntry
 }
 
 func newTxHeap(items int) *txHeap {
 	return &txHeap{
 		items:  make([]*txEntry, 0, items),
-		lookup: make(map[types.TransactionIdType]*txEntry, items),
+		lookup: make(map[core.TransactionIdType]*txEntry, items),
 	}
 }
 
@@ -59,12 +59,12 @@ func (th *txHeap) Pop() interface{} {
 	return item
 }
 
-func (th *txHeap) Get(id types.TransactionIdType) (*txEntry, bool) {
+func (th *txHeap) Get(id core.TransactionIdType) (*txEntry, bool) {
 	entry, ok := th.lookup[id]
 	return entry, ok
 }
 
-func (th *txHeap) Has(id types.TransactionIdType) bool {
+func (th *txHeap) Has(id core.TransactionIdType) bool {
 	_, has := th.Get(id)
 	return has
 }

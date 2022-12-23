@@ -3,7 +3,7 @@ package state
 import (
 	"encoding/binary"
 
-	"github.com/MetalBlockchain/antelopevm/chain/types"
+	"github.com/MetalBlockchain/antelopevm/core"
 	"github.com/MetalBlockchain/metalgo/cache"
 	"github.com/MetalBlockchain/metalgo/database"
 )
@@ -22,9 +22,9 @@ var (
 var _ AccountState = &accountState{}
 
 type AccountState interface {
-	GetAccountByName(types.AccountName) (*Account, error)
-	PutAccount(*Account) error
-	UpdateAccount(*Account, func(*Account)) error
+	GetAccountByName(core.AccountName) (*core.Account, error)
+	PutAccount(*core.Account) error
+	UpdateAccount(*core.Account, func(*core.Account)) error
 }
 
 type accountState struct {
@@ -39,7 +39,7 @@ func NewAccountState(db database.Database) AccountState {
 	}
 }
 
-func (s *accountState) GetAccount(id []byte) (*Account, error) {
+func (s *accountState) GetAccount(id []byte) (*core.Account, error) {
 	key := append(accountIdKey, id...)
 	wrappedBytes, err := s.db.Get(key)
 
@@ -47,7 +47,7 @@ func (s *accountState) GetAccount(id []byte) (*Account, error) {
 		return nil, err
 	}
 
-	account := &Account{}
+	account := &core.Account{}
 
 	if _, err := Codec.Unmarshal(wrappedBytes, account); err != nil {
 		return nil, err
@@ -56,7 +56,7 @@ func (s *accountState) GetAccount(id []byte) (*Account, error) {
 	return account, nil
 }
 
-func (s *accountState) GetAccountByName(name types.AccountName) (*Account, error) {
+func (s *accountState) GetAccountByName(name core.AccountName) (*core.Account, error) {
 	nameBytes, _ := name.Pack()
 	byNameKey := append(accountNameKey, nameBytes...)
 	wrappedBytes, err := s.db.Get(byNameKey)
@@ -68,7 +68,7 @@ func (s *accountState) GetAccountByName(name types.AccountName) (*Account, error
 	return s.GetAccount(wrappedBytes)
 }
 
-func (s *accountState) UpdateAccount(account *Account, updateFunc func(*Account)) error {
+func (s *accountState) UpdateAccount(account *core.Account, updateFunc func(*core.Account)) error {
 	if _, err := s.GetAccount(account.ID.ToBytes()); err != nil {
 		return err
 	}
@@ -106,7 +106,7 @@ func (s *accountState) UpdateAccount(account *Account, updateFunc func(*Account)
 	return batch.Write()
 }
 
-func (s *accountState) PutAccount(account *Account) error {
+func (s *accountState) PutAccount(account *core.Account) error {
 	wrappedBytes, err := Codec.Marshal(CodecVersion, &account)
 
 	if err != nil {
@@ -121,7 +121,7 @@ func (s *accountState) PutAccount(account *Account) error {
 		return err
 	}
 
-	account.ID = types.IdType(id)
+	account.ID = core.IdType(id)
 	batch := s.db.NewBatch()
 	key := append(accountIdKey, account.ID.ToBytes()...)
 	byNameKey := append(accountNameKey, nameBytes...)
@@ -149,7 +149,7 @@ func (s *accountState) GenerateAccountId() (uint64, error) {
 	return id, nil
 }
 
-func getAccountIndexKeys(account Account) map[string][]byte {
+func getAccountIndexKeys(account core.Account) map[string][]byte {
 	keys := make(map[string][]byte)
 	nameBytes, _ := account.Name.Pack()
 	byName := append(accountNameKey, nameBytes...)

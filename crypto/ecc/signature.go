@@ -17,8 +17,8 @@ type innerSignature interface {
 
 // Signature represents a signature for some hash
 type Signature struct {
-	Curve   CurveID
-	Content []byte // the Compact signature as bytes
+	Curve   CurveID `serialize:"true"`
+	Content []byte  `serialize:"true"`
 
 	innerSignature innerSignature
 }
@@ -53,15 +53,29 @@ func (s *Signature) Unpack(in []byte) (l int, err error) {
 }
 
 func (s Signature) Verify(hash []byte, pubKey PublicKey) bool {
+	s.SetInnerSignature()
 	return s.innerSignature.verify(s.Content, hash, pubKey)
 }
 
 func (s Signature) PublicKey(hash []byte) (out PublicKey, err error) {
+	s.SetInnerSignature()
 	return s.innerSignature.publicKey(s.Content, hash)
 }
 
 func (s Signature) String() string {
+	s.SetInnerSignature()
 	return s.innerSignature.string(s.Content)
+}
+
+func (s *Signature) SetInnerSignature() {
+	switch s.Curve {
+	case CurveK1:
+		s.innerSignature = &innerK1Signature{}
+	case CurveR1:
+		s.innerSignature = &innerR1Signature{}
+	default:
+		s.innerSignature = nil
+	}
 }
 
 func NewSignatureFromData(data []byte) (Signature, error) {

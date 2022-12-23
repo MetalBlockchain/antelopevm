@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/MetalBlockchain/antelopevm/chain/types"
+	"github.com/MetalBlockchain/antelopevm/core"
 	"github.com/MetalBlockchain/antelopevm/crypto/ecc"
 	"github.com/MetalBlockchain/antelopevm/state"
 	"github.com/MetalBlockchain/metalgo/database"
@@ -17,23 +17,25 @@ var (
 
 type AuthorizationManager struct {
 	Controller *Controller
+	State      state.State
 }
 
-func NewAuthorizationManager(controller *Controller) *AuthorizationManager {
+func NewAuthorizationManager(controller *Controller, s state.State) *AuthorizationManager {
 	return &AuthorizationManager{
 		Controller: controller,
+		State:      s,
 	}
 }
 
-func (a *AuthorizationManager) ModifyPermission(permission *state.Permission, auth *types.Authority) error {
+func (a *AuthorizationManager) ModifyPermission(permission *core.Permission, auth *core.Authority) error {
 	permission.Auth = *auth
-	permission.LastUpdated = types.Now()
+	permission.LastUpdated = core.Now()
 
-	return a.Controller.State.UpdatePermission(permission)
+	return a.State.UpdatePermission(permission)
 }
 
-func (a *AuthorizationManager) CreatePermission(account types.AccountName, name types.PermissionName, parent types.IdType, auth types.Authority, initialCreationTime types.TimePoint) (*state.Permission, error) {
-	perm := &state.Permission{
+func (a *AuthorizationManager) CreatePermission(account core.AccountName, name core.PermissionName, parent core.IdType, auth core.Authority, initialCreationTime core.TimePoint) (*core.Permission, error) {
+	perm := &core.Permission{
 		UsageId:     0,
 		Parent:      parent,
 		Owner:       account,
@@ -42,7 +44,7 @@ func (a *AuthorizationManager) CreatePermission(account types.AccountName, name 
 		Auth:        auth,
 	}
 
-	err := a.Controller.State.PutPermission(perm)
+	err := a.State.PutPermission(perm)
 
 	if err != nil {
 		return nil, err
@@ -53,8 +55,8 @@ func (a *AuthorizationManager) CreatePermission(account types.AccountName, name 
 
 // This function determines the minimum required permission for a certain action
 // If there is a linked permission we return that, if not we default to the active name
-func (a *AuthorizationManager) GetMinimumPermission(authorizerAccount types.AccountName, scope types.AccountName, actName types.ActionName) (*types.PermissionName, error) {
-	linkedPermission, err := a.Controller.State.GetPermissionLinkByActionName(authorizerAccount, scope, actName)
+func (a *AuthorizationManager) GetMinimumPermission(authorizerAccount core.AccountName, scope core.AccountName, actName core.ActionName) (*core.PermissionName, error) {
+	linkedPermission, err := a.State.GetPermissionLinkByActionName(authorizerAccount, scope, actName)
 
 	if err != nil {
 		if err == database.ErrNotFound {
@@ -65,8 +67,8 @@ func (a *AuthorizationManager) GetMinimumPermission(authorizerAccount types.Acco
 	return &linkedPermission.RequiredPermission, nil
 }
 
-func (a *AuthorizationManager) GetPermissionAuthority(level *types.PermissionLevel) (*types.Authority, error) {
-	permission, err := a.Controller.State.GetPermissionByOwner(level.Actor, level.Permission)
+func (a *AuthorizationManager) GetPermissionAuthority(level *core.PermissionLevel) (*core.Authority, error) {
+	permission, err := a.State.GetPermissionByOwner(level.Actor, level.Permission)
 
 	if err != nil {
 		return nil, err
@@ -75,8 +77,8 @@ func (a *AuthorizationManager) GetPermissionAuthority(level *types.PermissionLev
 	return &permission.Auth, nil
 }
 
-func (a *AuthorizationManager) CheckAuthorization(keys []ecc.PublicKey, actions []*types.Action) error {
-	permissionsToSatisfy := make(map[types.PermissionLevel]state.Permission)
+func (a *AuthorizationManager) CheckAuthorization(keys []ecc.PublicKey, actions []*core.Action) error {
+	permissionsToSatisfy := make(map[core.PermissionLevel]core.Permission)
 
 	for _, act := range actions {
 		for _, declaredAuth := range act.Authorization {
@@ -86,13 +88,13 @@ func (a *AuthorizationManager) CheckAuthorization(keys []ecc.PublicKey, actions 
 				return err
 			}
 
-			minPermission, err := a.Controller.State.GetPermissionByOwner(declaredAuth.Actor, *minPermissionName)
+			minPermission, err := a.State.GetPermissionByOwner(declaredAuth.Actor, *minPermissionName)
 
 			if err != nil {
 				return err
 			}
 
-			declaredPermission, err := a.Controller.State.GetPermissionByOwner(declaredAuth.Actor, declaredAuth.Permission)
+			declaredPermission, err := a.State.GetPermissionByOwner(declaredAuth.Actor, declaredAuth.Permission)
 
 			if err != nil {
 				return err
@@ -117,8 +119,8 @@ func (a *AuthorizationManager) CheckAuthorization(keys []ecc.PublicKey, actions 
 	return nil
 }
 
-func (a *AuthorizationManager) GetRequiredKeys(transaction types.Transaction, keys []ecc.PublicKey) ([]ecc.PublicKey, error) {
-	checker := NewAuthorityChecker(a.GetPermissionAuthority, keys, []types.PermissionLevel{}, 16)
+func (a *AuthorizationManager) GetRequiredKeys(transaction core.Transaction, keys []ecc.PublicKey) ([]ecc.PublicKey, error) {
+	checker := NewAuthorityChecker(a.GetPermissionAuthority, keys, []core.PermissionLevel{}, 16)
 
 	for _, act := range transaction.Actions {
 		for _, declaredAuth := range act.Authorization {

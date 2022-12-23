@@ -1,8 +1,9 @@
 package chain
 
 import (
-	"github.com/MetalBlockchain/antelopevm/chain/types"
+	"github.com/MetalBlockchain/antelopevm/core"
 	"github.com/MetalBlockchain/antelopevm/state"
+	log "github.com/inconshreveable/log15"
 )
 
 type v func(ctx *ApplyContext) error
@@ -10,81 +11,80 @@ type v func(ctx *ApplyContext) error
 type Controller struct {
 	Config        *Config
 	ApplyHandlers map[string]v
-	State         state.State
-	Authorization *AuthorizationManager
-	ChainId       types.ChainIdType
+	ChainId       core.ChainIdType
 }
 
-func NewController(state state.State, chainId types.ChainIdType) *Controller {
+func NewController(chainId core.ChainIdType) *Controller {
 	controller := &Controller{
 		Config:        GetDefaultConfig(),
-		State:         state,
 		ApplyHandlers: make(map[string]v),
 		ChainId:       chainId,
 	}
 
-	controller.Authorization = NewAuthorizationManager(controller)
-
 	// Add native functions
-	controller.CreateNativeAccount()
-	controller.SetApplyHandler(types.AccountName(types.N("eosio")), types.AccountName(types.N("eosio")), types.ActionName(types.N("newaccount")), applyEosioNewaccount)
-	controller.SetApplyHandler(types.AccountName(types.N("eosio")), types.AccountName(types.N("eosio")), types.ActionName(types.N("setcode")), applyEosioSetCode)
-	controller.SetApplyHandler(types.AccountName(types.N("eosio")), types.AccountName(types.N("eosio")), types.ActionName(types.N("setabi")), applyEosioSetAbi)
-	controller.SetApplyHandler(types.AccountName(types.N("eosio")), types.AccountName(types.N("eosio")), types.ActionName(types.N("updateauth")), applyEosioUpdateAuth)
-	controller.SetApplyHandler(types.AccountName(types.N("eosio")), types.AccountName(types.N("eosio")), types.ActionName(types.N("deleteauth")), applyEosioDeleteAuth)
-	controller.SetApplyHandler(types.AccountName(types.N("eosio")), types.AccountName(types.N("eosio")), types.ActionName(types.N("linkauth")), applyEosioLinkAuth)
-	controller.SetApplyHandler(types.AccountName(types.N("eosio")), types.AccountName(types.N("eosio")), types.ActionName(types.N("unlinkauth")), applyEosioUnlinkAuth)
+	controller.SetApplyHandler(core.AccountName(core.StringToName("eosio")), core.AccountName(core.StringToName("eosio")), core.ActionName(core.StringToName("newaccount")), applyEosioNewaccount)
+	controller.SetApplyHandler(core.AccountName(core.StringToName("eosio")), core.AccountName(core.StringToName("eosio")), core.ActionName(core.StringToName("setcode")), applyEosioSetCode)
+	controller.SetApplyHandler(core.AccountName(core.StringToName("eosio")), core.AccountName(core.StringToName("eosio")), core.ActionName(core.StringToName("setabi")), applyEosioSetAbi)
+	controller.SetApplyHandler(core.AccountName(core.StringToName("eosio")), core.AccountName(core.StringToName("eosio")), core.ActionName(core.StringToName("updateauth")), applyEosioUpdateAuth)
+	controller.SetApplyHandler(core.AccountName(core.StringToName("eosio")), core.AccountName(core.StringToName("eosio")), core.ActionName(core.StringToName("deleteauth")), applyEosioDeleteAuth)
+	controller.SetApplyHandler(core.AccountName(core.StringToName("eosio")), core.AccountName(core.StringToName("eosio")), core.ActionName(core.StringToName("linkauth")), applyEosioLinkAuth)
+	controller.SetApplyHandler(core.AccountName(core.StringToName("eosio")), core.AccountName(core.StringToName("eosio")), core.ActionName(core.StringToName("unlinkauth")), applyEosioUnlinkAuth)
 
 	return controller
 }
 
-func (c *Controller) InitGenesis(config *GenesisFile) error {
-	if err := c.CreateNativeAccount(); err != nil {
+func (c *Controller) InitGenesis(st state.State, config *GenesisFile) error {
+	if err := c.CreateNativeAccount(st); err != nil {
 		return err
 	}
 
-	auth := types.Authority{
+	auth := core.Authority{
 		Threshold: 1,
-		Keys: []types.KeyWeight{{
-			Key:    config.InitialKey.String(),
+		Keys: []core.KeyWeight{{
+			Key:    config.InitialKey,
 			Weight: 1,
 		}},
 	}
 
-	ownerPermission, err := c.Authorization.CreatePermission(c.Config.SystemAccountName, c.Config.OwnerName, types.IdType(0), auth, config.InitialTimeStamp)
+	authorizationManager := c.GetAuthorizationManager(st)
+	ownerPermission, err := authorizationManager.CreatePermission(c.Config.SystemAccountName, c.Config.OwnerName, core.IdType(0), auth, config.InitialTimeStamp)
 
 	if err != nil {
 		return err
 	}
 
-	if _, err := c.Authorization.CreatePermission(c.Config.SystemAccountName, c.Config.ActiveName, ownerPermission.ID, auth, config.InitialTimeStamp); err != nil {
+	if _, err := authorizationManager.CreatePermission(c.Config.SystemAccountName, c.Config.ActiveName, ownerPermission.ID, auth, config.InitialTimeStamp); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (c *Controller) CreateNativeAccount() error {
-	_, err := c.State.GetAccountByName(c.Config.SystemAccountName)
+func (c *Controller) GetAuthorizationManager(s state.State) *AuthorizationManager {
+	return NewAuthorizationManager(c, s)
+}
+
+func (c *Controller) CreateNativeAccount(st state.State) error {
+	_, err := st.GetAccountByName(c.Config.SystemAccountName)
 
 	if err != nil {
-		nativeAccount := &state.Account{
+		nativeAccount := &core.Account{
 			Name:       c.Config.SystemAccountName,
 			Privileged: true,
 		}
 
-		return c.State.PutAccount(nativeAccount)
+		return st.PutAccount(nativeAccount)
 	}
 
 	return nil
 }
 
-func (c *Controller) SetApplyHandler(receiver types.AccountName, contract types.AccountName, action types.ActionName, handler func(a *ApplyContext) error) {
+func (c *Controller) SetApplyHandler(receiver core.AccountName, contract core.AccountName, action core.ActionName, handler func(a *ApplyContext) error) {
 	handlerKey := receiver + contract + action
 	c.ApplyHandlers[handlerKey.String()] = handler
 }
 
-func (c *Controller) FindApplyHandler(receiver types.AccountName, scope types.AccountName, act types.ActionName) func(*ApplyContext) error {
+func (c *Controller) FindApplyHandler(receiver core.AccountName, scope core.AccountName, act core.ActionName) func(*ApplyContext) error {
 	handlerKey := receiver + scope + act
 
 	if handler, ok := c.ApplyHandlers[handlerKey.String()]; ok {
@@ -94,29 +94,56 @@ func (c *Controller) FindApplyHandler(receiver types.AccountName, scope types.Ac
 	return nil
 }
 
-func (c *Controller) PushTransaction(trx types.SignedTransaction) (*types.TransactionTrace, error) {
+func (c *Controller) PushTransaction(s state.State, packedTrx core.PackedTransaction) (*core.TransactionTrace, error) {
+	trx, err := packedTrx.GetSignedTransaction()
+
+	log.Info("got signed trx", "trx", trx)
+
+	if err != nil {
+		log.Error("failed to get signed transaction", "error", err)
+		return nil, err
+	}
+
 	// Check authority
 	keys, err := trx.GetSignatureKeys(&c.ChainId, false, true)
 
 	if err != nil {
+		log.Error("failed to get signature keys", "error", err)
+
 		return nil, err
 	}
 
-	if err := c.Authorization.CheckAuthorization(keys, trx.Actions); err != nil {
+	authorizationManager := c.GetAuthorizationManager(s)
+
+	if err := authorizationManager.CheckAuthorization(keys, trx.Actions); err != nil {
+		log.Error("failed to get check transaction authorization", "error", err)
 		return nil, err
 	}
 
-	trxContext := NewTransactionContext(c, &trx, trx.ID())
+	trxContext := NewTransactionContext(c, s, trx, trx.ID())
 
 	if err := trxContext.Init(); err != nil {
+		log.Error("failed to init transaction context", "error", err)
 		return nil, err
 	}
 
 	if err := trxContext.Exec(); err != nil {
+		log.Error("failed to exec transaction context", "error", err)
 		return nil, err
 	}
 
+	trxContext.Trace.Id = packedTrx.Id
+	trxContext.Trace.Receipt = core.TransactionReceipt{
+		TransactionReceiptHeader: core.TransactionReceiptHeader{
+			Status:        core.TransactionStatusExecuted,
+			CpuUsageUs:    0,
+			NetUsageWords: core.Vuint32(0),
+		},
+		Transaction: packedTrx,
+	}
+
 	if err := trxContext.Finalize(); err != nil {
+		log.Error("failed to finalize transaction context", "error", err)
 		return nil, err
 	}
 

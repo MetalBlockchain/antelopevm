@@ -1,4 +1,4 @@
-package types
+package core
 
 import (
 	"encoding/json"
@@ -9,42 +9,36 @@ import (
 	"github.com/MetalBlockchain/antelopevm/crypto"
 	"github.com/MetalBlockchain/antelopevm/crypto/ecc"
 	"github.com/MetalBlockchain/antelopevm/crypto/rlp"
+	"github.com/inconshreveable/log15"
 )
-
-//var recoveryCache = make(map[string]CachedPubKey)
-
-type CachedPubKey struct {
-	TrxID  TransactionIdType `json:"trx_id"`
-	PubKey ecc.PublicKey     `json:"pub_key"`
-	Sig    ecc.Signature     `json:"sig"`
-}
 
 type TransactionIdType = crypto.Sha256
 
 type Extension struct {
-	Type uint16   `json:"type"`
-	Data HexBytes `json:"data"`
+	Type uint16   `serialize:"true" json:"type"`
+	Data HexBytes `serialize:"true" json:"data"`
 }
 
+/**
+*  The transaction header contains the fixed-sized data
+*  associated with each transaction. It is separated from
+*  the transaction body to facilitate partial parsing of
+*  transactions without requiring dynamic memory allocation.
+*
+*  All transactions have an expiration time after which they
+*  may no longer be included in the blockchain. Once a block
+*  with a block_header::timestamp greater than expiration is
+*  deemed irreversible, then a user can safely trust the transaction
+*  will never be included.
+ */
 type TransactionHeader struct {
-	Expiration     TimePointSec `json:"expiration"`
-	RefBlockNum    uint16       `json:"ref_block_num"`
-	RefBlockPrefix uint32       `json:"ref_block_prefix"`
+	Expiration     TimePointSec `serialize:"true" json:"expiration"`
+	RefBlockNum    uint16       `serialize:"true" json:"ref_block_num"`
+	RefBlockPrefix uint32       `serialize:"true" json:"ref_block_prefix"`
 
-	MaxNetUsageWords Vuint32 `json:"max_net_usage_words" eos:"vuint32"`
-	MaxCpuUsageMS    uint8   `json:"max_cpu_usage_ms"`
-	DelaySec         Vuint32 `json:"delay_sec" eos:"vuint32"` // number of secs to delay, making it cancellable for that duration
-}
-
-func (t TransactionHeader) IsEmpty() bool {
-	return t.Expiration == 0 && t.RefBlockNum == 0 && t.RefBlockPrefix == 0 && t.MaxNetUsageWords == 0 && t.MaxCpuUsageMS == 0 && t.DelaySec == 0
-}
-func (t TransactionHeader) GetRefBlocknum(headBlocknum uint32) uint32 {
-	return headBlocknum/0xffff*0xffff + headBlocknum%0xffff
-}
-
-func (t TransactionHeader) VerifyReferenceBlock(referenceBlock *BlockIdType) bool {
-	return t.RefBlockNum == uint16(EndianReverseU32(uint32(referenceBlock.Hash[0]))) && t.RefBlockPrefix == uint32(referenceBlock.Hash[1])
+	MaxNetUsageWords Vuint32 `serialize:"true" json:"max_net_usage_words"`
+	MaxCpuUsageMS    uint8   `serialize:"true" json:"max_cpu_usage_ms"`
+	DelaySec         Vuint32 `serialize:"true" json:"delay_sec"` // number of secs to delay, making it cancellable for that duration
 }
 
 func (t TransactionHeader) Validate() {
@@ -53,24 +47,11 @@ func (t TransactionHeader) Validate() {
 	}
 }
 
-func (t *TransactionHeader) SetReferenceBlock(referenceBlock *BlockIdType) {
-	first := EndianReverseU32(uint32(referenceBlock.Hash[0]))
-	t.RefBlockNum = uint16(first)
-	t.RefBlockPrefix = uint32(referenceBlock.Hash[1])
-}
-
 type Transaction struct {
-	TransactionHeader
-	ContextFreeActionLength Vuint32
-	ContextFreeActions      []*Action `json:"context_free_actions"`
-	ActionLength            Vuint32
-	Actions                 []*Action `json:"actions"`
-	ExtensionLength         Vuint32
-	TransactionExtensions   []*Extension `json:"transaction_extensions"`
-}
-
-func (t Transaction) IsEmtpy() bool {
-	return len(t.ContextFreeActions) == 0 && len(t.Actions) == 0 && len(t.TransactionExtensions) == 0 && t.TransactionHeader.IsEmpty()
+	TransactionHeader     `serialize:"true"`
+	ContextFreeActions    []*Action    `serialize:"true" json:"context_free_actions"`
+	Actions               []*Action    `serialize:"true" json:"actions"`
+	TransactionExtensions []*Extension `serialize:"true" json:"transaction_extensions"`
 }
 
 func (t *Transaction) ID() TransactionIdType {
@@ -82,19 +63,6 @@ func (t *Transaction) ID() TransactionIdType {
 	enc.Write(b)
 	hashed := enc.Sum(nil)
 	return TransactionIdType(*crypto.NewSha256Byte(hashed))
-}
-
-func (t *Transaction) TotalActions() uint32 {
-	return uint32(len(t.ContextFreeActions) + len(t.Actions))
-}
-
-func (tx *Transaction) FirstAuthorizor() AccountName {
-	for _, a := range tx.Actions {
-		for _, auth := range a.Authorization {
-			return auth.Actor
-		}
-	}
-	return AccountName(0)
 }
 
 func (t *Transaction) SigDigest(chainID *ChainIdType, cfd []HexBytes) *DigestType {
@@ -150,11 +118,23 @@ func (t *Transaction) GetSignatureKeys(signatures []ecc.Signature, chainID *Chai
 	return list, nil
 }
 
-type SignedTransaction struct {
-	Transaction
+func (t *Transaction) TotalActions() uint32 {
+	return uint32(len(t.ContextFreeActions) + len(t.Actions))
+}
 
-	Signatures      []ecc.Signature `json:"signatures"`
-	ContextFreeData []HexBytes      `json:"context_free_data"`
+func (tx *Transaction) FirstAuthorizor() AccountName {
+	for _, a := range tx.Actions {
+		for _, auth := range a.Authorization {
+			return auth.Actor
+		}
+	}
+	return AccountName(0)
+}
+
+type SignedTransaction struct {
+	Transaction     `serialize:"true"`
+	Signatures      []ecc.Signature `serialize:"true" json:"signatures"`
+	ContextFreeData []HexBytes      `serialize:"true" json:"context_free_data"`
 }
 
 func NewSignedTransaction(tx *Transaction, signature []ecc.Signature, contextFreeData []HexBytes) *SignedTransaction {
@@ -190,15 +170,6 @@ const (
 	TransactionStatusDelayed                           ///< transaction delayed
 	TransactionStatusExpired
 	TransactionStatusUnknown = TransactionStatus(255)
-)
-
-type BlockStatus uint8
-
-const (
-	Irreversible BlockStatus = iota ///< this block has already been applied before by this node and is considered irreversible
-	Validated                       ///< this is a complete block signed by a valid producer and has been previously applied by this node and therefore validated but it is not yet irreversible
-	Complete                        ///< this is a complete block signed by a valid producer but is not yet irreversible nor has it yet been applied by this node
-	Incomplete                      ///< this is an incomplete block (either being produced by a producer or speculatively produced by a node)
 )
 
 func (s *TransactionStatus) UnmarshalJSON(data []byte) error {
@@ -251,35 +222,39 @@ func (s TransactionStatus) String() string {
 	}
 }
 
-type TransactionReceiptHeader struct {
-	Status        TransactionStatus `json:"status"`
-	CpuUsageUs    uint32            `json:"cpu_usage_us"`
-	NetUsageWords Vuint32           `json:"net_usage_words" eos:"vuint32"`
-}
-
-func (t TransactionReceiptHeader) IsEmpty() bool {
-	return t.Status == 0 && t.CpuUsageUs == 0 && t.NetUsageWords == 0
-}
-
-type TransactionReceipt struct {
-	TransactionReceiptHeader
-	Trx TransactionWithID `json:"trx" eos:"trxID"`
-}
-
-type TransactionWithID struct {
-	PackedTransaction *PackedTransaction `json:"packed_transaction" eos:"tag0"`
-	TransactionID     TransactionIdType  `json:"transaction_id" eos:"tag1"`
-}
-
 // PackedTransaction represents a fully packed transaction, with
 // signatures, and all. They circulate like that on the P2P net, and
 // that's how they are stored.
 type PackedTransaction struct {
-	Signatures            []ecc.Signature `json:"signatures"`
-	Compression           CompressionType `json:"compression"` // in C++, it's an enum, not sure how it Binary-marshals..
-	PackedContextFreeData HexBytes        `json:"packed_context_free_data"`
-	PackedTrx             HexBytes        `json:"packed_trx"`
-	UnpackedTrx           *Transaction    `json:"transaction" eos:"-"`
+	Signatures            []ecc.Signature   `serialize:"true" json:"signatures"`
+	Compression           CompressionType   `serialize:"true" json:"compression"` // in C++, it's an enum, not sure how it Binary-marshals..
+	PackedContextFreeData HexBytes          `serialize:"true" json:"packed_context_free_data"`
+	PackedTrx             HexBytes          `serialize:"true" json:"packed_trx"`
+	UnpackedTrx           *Transaction      `json:"transaction"`
+	Id                    TransactionIdType `json:"id"`
+}
+
+func NewPackedTransactionFromSignedTransaction(signedTrx SignedTransaction, compressionType CompressionType) (*PackedTransaction, error) {
+	packedBytes, err := packTransaction(&signedTrx.Transaction)
+
+	if err != nil {
+		return nil, err
+	}
+
+	packedContextFreeData, err := packContextFreeData(&signedTrx.ContextFreeData)
+
+	if err != nil {
+		return nil, err
+	}
+
+	packedTrx := &PackedTransaction{
+		Signatures:            signedTrx.Signatures,
+		PackedTrx:             packedBytes,
+		PackedContextFreeData: packedContextFreeData,
+		Compression:           compressionType,
+	}
+
+	return packedTrx, nil
 }
 
 func (p *PackedTransaction) GetSignedTransaction() (*SignedTransaction, error) {
@@ -287,12 +262,14 @@ func (p *PackedTransaction) GetSignedTransaction() (*SignedTransaction, error) {
 		unpackContextFreeData, err := unpackContextFreeData(&p.PackedContextFreeData)
 
 		if err != nil {
+			log15.Error("failed to get unpackContextFreeData", "error", err)
 			return nil, err
 		}
 
 		unpackedTransaction, err := p.GetUnpackedTransaction()
 
 		if err != nil {
+			log15.Error("failed to get unpackedTransaction", "error", err)
 			return nil, err
 		}
 
@@ -300,6 +277,25 @@ func (p *PackedTransaction) GetSignedTransaction() (*SignedTransaction, error) {
 	}
 
 	return nil, fmt.Errorf("unknown compression")
+}
+
+func (p *PackedTransaction) PackedDigest() crypto.Sha256 {
+	prunable := crypto.NewSha256()
+	result, _ := rlp.EncodeToBytes(p.Signatures)
+	prunable.Write(result)
+	result, _ = rlp.EncodeToBytes(p.PackedContextFreeData)
+	prunable.Write(result)
+	prunableResult := *crypto.NewSha256Byte(prunable.Sum(nil))
+
+	enc := crypto.NewSha256()
+	result, _ = rlp.EncodeToBytes(p.Compression)
+	enc.Write(result)
+	result, _ = rlp.EncodeToBytes(p.PackedTrx)
+	enc.Write(result)
+	result, _ = rlp.EncodeToBytes(prunableResult)
+	enc.Write(result)
+
+	return *crypto.NewSha256Byte(enc.Sum(nil))
 }
 
 func (p *PackedTransaction) GetUnpackedTransaction() (*Transaction, error) {
@@ -317,45 +313,32 @@ func (p *PackedTransaction) unpackTransaction() (*Transaction, error) {
 		return nil, err
 	}
 
+	p.UnpackedTrx = transaction
+	p.Id = transaction.ID()
+
 	return transaction, nil
 }
 
-type CompressionType uint8
-
-const (
-	CompressionNone = CompressionType(iota)
-	CompressionZlib
-)
-
-func (c CompressionType) String() string {
-	switch c {
-	case CompressionNone:
-		return "none"
-	case CompressionZlib:
-		return "zlib"
-	default:
-		return ""
-	}
-}
-
-func (c CompressionType) MarshalJSON() ([]byte, error) {
-	return json.Marshal(c.String())
-}
-
-func (c *CompressionType) UnmarshalJSON(data []byte) error {
-	var s string
-	err := json.Unmarshal(data, &s)
-	if err != nil {
-		return err
+func (p *PackedTransaction) MarshalJSON() ([]byte, error) {
+	if p.UnpackedTrx == nil {
+		p.unpackTransaction()
 	}
 
-	switch s {
-	case "zlib":
-		*c = CompressionZlib
-	default:
-		*c = CompressionNone
-	}
-	return nil
+	return json.Marshal(&struct {
+		Signatures            []ecc.Signature   `json:"signatures"`
+		Compression           CompressionType   `json:"compression"`
+		PackedContextFreeData HexBytes          `json:"packed_context_free_data"`
+		PackedTrx             HexBytes          `json:"packed_trx"`
+		UnpackedTrx           *Transaction      `json:"transaction"`
+		Id                    TransactionIdType `json:"id"`
+	}{
+		Signatures:            p.Signatures,
+		Compression:           p.Compression,
+		PackedContextFreeData: p.PackedContextFreeData,
+		PackedTrx:             p.PackedTrx,
+		UnpackedTrx:           p.UnpackedTrx,
+		Id:                    p.Id,
+	})
 }
 
 func unpackContextFreeData(data *HexBytes) ([]HexBytes, error) {
@@ -366,6 +349,30 @@ func unpackContextFreeData(data *HexBytes) ([]HexBytes, error) {
 	}
 
 	err := rlp.DecodeBytes([]byte(*data), &out)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return out, nil
+}
+
+func packTransaction(t *Transaction) ([]byte, error) { //Bytes
+	out, err := rlp.EncodeToBytes(t)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return out, nil
+}
+
+func packContextFreeData(cfd *[]HexBytes) ([]byte, error) {
+	if len(*cfd) == 0 {
+		return []byte{}, nil
+	}
+
+	out, err := rlp.EncodeToBytes(cfd)
 
 	if err != nil {
 		return nil, err
