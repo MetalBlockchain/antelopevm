@@ -10,20 +10,20 @@ Antelope based Virtual Machine for the Metal Blockchain to support the A chain. 
 
 | Name                      | Status  |
 | ------------------------- |:-------:|
-| read_action_data          | :heavy_check_mark: |
-| action_data_size          | :heavy_check_mark: |
-| current_receiver          | :heavy_check_mark: |
+| read_action_data          | :white_check_mark: |
+| action_data_size          | :white_check_mark: |
+| current_receiver          | :white_check_mark: |
 | set_action_return_value   | Missing |
 
 ### Authorization functions:
 
 | Name                      | Status             |
 | ------------------------- |:-------:           |
-| require_auth              | :heavy_check_mark: |
-| has_auth                  | :heavy_check_mark: |
+| require_auth              | :white_check_mark: |
+| has_auth                  | :white_check_mark: |
 | require_auth2             | Missing            |
 | require_recipient         | Missing            |
-| is_account                | :heavy_check_mark: |
+| is_account                | :white_check_mark: |
 
 ### Assert functions:
 
