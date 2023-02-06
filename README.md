@@ -4,6 +4,10 @@ Antelope based Virtual Machine for the Metal Blockchain to support the A chain. 
 
 **This is work in progress**
 
+## Database format
+
+Antelope VM relies on BadgerDB as its key-value store having access to the entire DB in-memory.
+
 ## Implemented Host Functions
 
 ### Action functions:
@@ -12,27 +16,37 @@ Antelope based Virtual Machine for the Metal Blockchain to support the A chain. 
 | ------------------------- |:-------:|
 | read_action_data          | :white_check_mark: |
 | action_data_size          | :white_check_mark: |
+| require_recipient         | Missing            |
+| require_auth              | :white_check_mark: |
+| has_auth                  | :white_check_mark: |
+| require_auth2             | :white_check_mark: |
+| is_account                | :white_check_mark: |
+| send_inline               | Missing                   |
+| send_context_free_inline  | Missing                   |
+| publication_time          | Missing                   |
 | current_receiver          | :white_check_mark: |
 | set_action_return_value   | Missing |
 
-### Authorization functions:
-
-| Name                      | Status             |
-| ------------------------- |:-------:           |
-| require_auth              | :white_check_mark: |
-| has_auth                  | :white_check_mark: |
-| require_auth2             | Missing            |
-| require_recipient         | Missing            |
-| is_account                | :white_check_mark: |
-
-### Assert functions:
+### Chain functions:
 
 | Name                      | Status  |
 | ------------------------- |:-------:|
-| eosio_assert              | Missing |
-| eosio_assert_message      | Missing |
-| eosio_assert_code         | Missing |
-| eosio_exit                | Missing |
+| get_active_producers      | Missing |
+
+### Crypto functions:
+
+| Name                      | Status  |
+| ------------------------- |:-------:|
+| assert_recover_key        | :white_check_mark: |
+| recover_key               | :white_check_mark: |
+| assert_sha256             | :white_check_mark: |
+| assert_sha1               | :white_check_mark: |
+| assert_sha512             | :white_check_mark: |
+| assert_ripemd160          | :white_check_mark: |
+| sha1                      | :white_check_mark: |
+| sha256                    | :white_check_mark: |
+| sha512                    | :white_check_mark: |
+| ripemd160                 | :white_check_mark: |
 
 ### Transaction functions:
 
@@ -45,54 +59,17 @@ Antelope based Virtual Machine for the Metal Blockchain to support the A chain. 
 | tapos_block_prefix        | Missing |
 | get_action                | Missing |
 
-### Console functions:
-
-| Name                      | Status  |
-| ------------------------- |:-------:|
-| prints                    | Missing |
-| prints_l                  | Missing |
-| printi                    | Missing |
-| printui                   | Missing |
-| printi128                 | Missing |
-| printui128                | Missing |
-| printsf                   | Missing |
-| printdf                   | Missing |
-| printqf                   | Missing |
-| printn                    | Missing |
-| printhex                  | Missing |
-
-### Context free functions:
-
-| Name                      | Status  |
-| ------------------------- |:-------:|
-| get_context_free_data     | Missing |
-
-### Crypto functions:
-
-| Name                      | Status  |
-| ------------------------- |:-------:|
-| assert_recover_key        | Missing |
-| recover_key               | Missing |
-| assert_sha256             | Missing |
-| assert_sha1               | Missing |
-| assert_sha512             | Missing |
-| assert_ripemd160          | Missing |
-| sha1                      | Missing |
-| sha256                    | Missing |
-| sha512                    | Missing |
-| ripemd160                 | Missing |
-
 ### Database functions:
 
 | Name                      | Status  |
 | ------------------------- |:-------:|
-| db_store_i64              | Missing |
-| db_update_i64             | Missing |
-| db_remove_i64             | Missing |
-| db_get_i64                | Missing |
-| db_next_i64               | Missing |
+| db_store_i64              | :white_check_mark: |
+| db_update_i64             | :white_check_mark: |
+| db_remove_i64             | :white_check_mark: |
+| db_get_i64                | :white_check_mark: |
+| db_next_i64               | :white_check_mark: |
 | db_previous_i64           | Missing |
-| db_find_i64               | Missing |
+| db_find_i64               | :white_check_mark: |
 | db_lowerbound_i64         | Missing |
 | db_upperbound_i64         | Missing |
 | db_idx64_store            | Missing |
@@ -146,7 +123,7 @@ Antelope based Virtual Machine for the Metal Blockchain to support the A chain. 
 | db_idx_long_double_next                | Missing |
 | db_idx_long_double_previous                | Missing |
 
-### Key value functions:
+### Map functions:
 
 | Name                      | Status  |
 | ------------------------- |:-------:|
@@ -170,10 +147,10 @@ Antelope based Virtual Machine for the Metal Blockchain to support the A chain. 
 
 | Name                      | Status      |
 | ------------------------- |:-----------:|
-| memcpy                    | Implemented |
-| memmove                   | Implemented |
-| memcmp                    | Implemented |
-| memset                    | Implemented |
+| memcpy                    | :white_check_mark: |
+| memmove                   | :white_check_mark: |
+| memcmp                    | :white_check_mark: |
+| memset                    | :white_check_mark: |
 
 ### Permission functions:
 
@@ -184,52 +161,63 @@ Antelope based Virtual Machine for the Metal Blockchain to support the A chain. 
 | get_permission_last_used          | Missing |
 | get_account_creation_time         | Missing |
 
+### Print functions:
+
+| Name                      | Status  |
+| ------------------------- |:-------:|
+| prints                    | Missing |
+| prints_l                  | Missing |
+| printi                    | Missing |
+| printui                   | Missing |
+| printi128                 | Missing |
+| printui128                | Missing |
+| printsf                   | Missing |
+| printdf                   | Missing |
+| printqf                   | Missing |
+| printn                    | Missing |
+| printhex                  | Missing |
+
 ### Privileged functions:
 
 | Name                              | Status  |
 | --------------------------------- |:-------:|
-| is_feature_active                 | Missing |
-| preactivate_feature               | Missing |
-| set_resource_limits               | Missing |
 | get_resource_limits               | Missing |
-| set_resource_limit                | Missing |
-| get_resource_limit                | Missing |
-| get_wasm_parameters_packed        | Missing |
-| set_wasm_parameters_packed        | Missing |
+| set_resource_limits               | Missing |
 | set_proposed_producers            | Missing |
 | set_proposed_producers_ex         | Missing |
-| get_blockchain_parameters_packed  | Missing |
-| set_blockchain_parameters_packed  | Missing |
-| get_parameters_packed             | Missing |
-| set_parameters_packed             | Missing |
-| get_kv_parameters_packed          | Missing |
-| set_kv_parameters_packed          | Missing |
 | is_privileged                     | Missing |
 | set_privileged                    | Missing |
-
-### Producer functions:
-
-| Name                      | Status  |
-| ------------------------- |:-------:|
-| get_active_producers      | Missing |
+| set_blockchain_parameters_packed  | Missing |
+| get_blockchain_parameters_packed  | Missing |
+| set_kv_parameters_packed          | Missing |
+| preactivate_feature               | Missing |
 
 ### System functions:
 
 | Name                      | Status  |
 | ------------------------- |:-------:|
-| current_time              | Missing |
-| publication_time          | Missing |
-| is_feature_activated      | Missing |
-| get_sender                | Missing |
+| eosio_assert              | :white_check_mark: |
+| eosio_assert_message      | :white_check_mark: |
+| eosio_assert_code         | :white_check_mark: |
+| eosio_exit                | :white_check_mark: |
+| current_time              | :white_check_mark: |
+| is_feature_activated      | :white_check_mark: |
+| get_sender                | :white_check_mark: |
+| abort                     | :white_check_mark: |
 
 ### Transaction functions:
 
-| Name                      | Status                    |
-| ------------------------- |:-------------------------:|
-| send_inline               | Missing                   |
-| send_context_free_inline  | Missing                   |
-| send_deferred             | Deprecated, won't support |
-| get_sender                | Missing                   |
+| Name                      | Status  |
+| ------------------------- |:-------:|
+| send_deferred             | Missing |
+| cancel_deferred           | Missing |
+| read_transaction         | :white_check_mark: |
+| transaction_size                | :white_check_mark: |
+| tapos_block_num              | :white_check_mark: |
+| tapos_block_prefix      | :white_check_mark: |
+| expiration                | :white_check_mark: |
+| get_action                | :white_check_mark: |
+| get_context_free_data                | :white_check_mark: |
 
 ### Compiler builtins:
 
