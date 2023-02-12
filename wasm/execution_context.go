@@ -17,10 +17,10 @@ type ExecutionContext struct {
 	context      context.Context
 	engine       wazero.Runtime
 	module       api.Module
-	applyContext ApplyContext
+	applyContext wasmApi.ApplyContext
 }
 
-func NewWasmExecutionContext(context context.Context, applyContext ApplyContext) *ExecutionContext {
+func NewWasmExecutionContext(context context.Context, applyContext wasmApi.ApplyContext) *ExecutionContext {
 	return &ExecutionContext{
 		context:      context,
 		applyContext: applyContext,
@@ -32,10 +32,10 @@ func (c *ExecutionContext) Initialize() error {
 	c.engine = wazero.NewRuntime(c.context)
 
 	if _, err := c.engine.NewHostModuleBuilder("env").
-		ExportFunctions(GetAccountFunctions(c)).
-		ExportFunctions(GetMemoryFunctions(c)).
+		ExportFunctions(wasmApi.GetAccountFunctions(c)).
+		ExportFunctions(wasmApi.GetMemoryFunctions(c)).
 		ExportFunctions(GetConsoleFunctions(c)).
-		ExportFunctions(GetActionFunctions(c)).
+		ExportFunctions(wasmApi.GetActionFunctions(c)).
 		ExportFunctions(GetMathFunctions(c)).
 		ExportFunctions(GetSystemFunctions(c)).
 		ExportFunctions(GetDatabaseFunctions(c)).
@@ -110,4 +110,8 @@ func (c *ExecutionContext) WriteMemory(start uint32, data []byte) {
 	if ok := c.module.Memory().Write(c.context, start, data); !ok {
 		panic("memory write out of range")
 	}
+}
+
+func (c *ExecutionContext) GetApplyContext() wasmApi.ApplyContext {
+	return c.applyContext
 }
