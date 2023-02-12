@@ -3,40 +3,43 @@ package wasm
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
-	"github.com/MetalBlockchain/antelopevm/utils"
+	wasmApi "github.com/MetalBlockchain/antelopevm/wasm/api"
+	"github.com/inconshreveable/log15"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
-	"github.com/wasmerio/wasmer-go/wasmer"
 )
 
+var _ wasmApi.Context = &ExecutionContext{}
+
 type ExecutionContext struct {
-	context context.Context
-	engine  wazero.Runtime
-	store   *wasmer.Store
-	imports *wasmer.ImportObject
-	ram     *wasmer.Memory
-	module  api.Module
+	context      context.Context
+	engine       wazero.Runtime
+	module       api.Module
+	applyContext ApplyContext
 }
 
-func (c *ExecutionContext) Initialize() {
+func NewWasmExecutionContext(context context.Context, applyContext ApplyContext) *ExecutionContext {
+	return &ExecutionContext{
+		context:      context,
+		applyContext: applyContext,
+	}
+}
+
+func (c *ExecutionContext) Initialize() error {
 	c.context = context.Background()
 	c.engine = wazero.NewRuntime(c.context)
-	c.imports = wasmer.NewImportObject()
-	c.engine.NewHostModuleBuilder("env").
+
+	if _, err := c.engine.NewHostModuleBuilder("env").
 		ExportFunctions(GetAccountFunctions(c)).
 		ExportFunctions(GetMemoryFunctions(c)).
 		ExportFunctions(GetConsoleFunctions(c)).
 		ExportFunctions(GetActionFunctions(c)).
 		ExportFunctions(GetMathFunctions(c)).
-		ExportFunction("eosio_assert", EosIoAssert(c)).
-		ExportFunction("db_find_i64", FindI64(c)).
-		ExportFunction("abort", Abort(c)).
-		ExportFunction("db_update_i64", UpdateI64(c)).
-		ExportFunction("db_store_i64", StoreI64(c)).
-		ExportFunction("db_next_i64", NextI64(c)).
+		ExportFunctions(GetSystemFunctions(c)).
+		ExportFunctions(GetDatabaseFunctions(c)).
+		ExportFunctions(wasmApi.GetCryptoFunctions(c)).
 		ExportFunction("__extendsftf2", Extendsftf2(c)).
 		ExportFunction("__floatsitf", Floatsitf(c)).
 		ExportFunction("__multf3", Multf3(c)).
@@ -54,77 +57,57 @@ func (c *ExecutionContext) Initialize() {
 		ExportFunction("__unordtf2", Unordtf2(c)).
 		ExportFunction("__fixunstfsi", Fixunstfsi(c)).
 		ExportFunction("__fixtfsi", Fixtfsi(c)).
-		ExportFunction("eosio_assert_code", AssertCode(c)).
-		ExportFunction("db_get_i64", GetI64(c)).
-		ExportFunction("db_remove_i64", RemoveI64(c)).
-		Instantiate(c.context, c.engine)
-	/* map[string]wasmer.IntoExtern{
-			"require_auth":      RequireAuth(context),
-			"eosio_assert":      EosIoAssert(context),
-			"db_find_i64":       FindI64(context),
-			"current_receiver":  CurrentReceiver(context),
-			"abort":             Abort(context),
-			"memset":            MemSet(context),
-			"memcpy":            MemCopy(context),
-			"db_update_i64":     UpdateI64(context),
-			"db_store_i64":      StoreI64(context),
-			"is_account":        IsAccount(context),
-			"require_recipient": RequireRecipient(context),
-			"has_auth":          HasAuth(context),
-			"db_next_i64":       NextI64(context),
-			"action_data_size":  ActionDataSize(context),
-			"read_action_data":  ReacActionData(context),
-			"memmove":           MemMove(context),
-			"__extendsftf2":     Extendsftf2(context),
-			"__floatsitf":       Floatsitf(context),
-			"__multf3":          Multf3(context),
-			"__floatunsitf":     Floatunsitf(context),
-			"__divtf3":          Divtf3(context),
-			"__addtf3":          Addtf3(context),
-			"__extenddftf2":     Extenddftf2(context),
-			"__eqtf2":           Eqtf2(context),
-			"__letf2":           Letf2(context),
-			"__netf2":           Netf2(context),
-			"__subtf3":          Subtf3(context),
-			"__trunctfdf2":      Trunctfdf2(context),
-			"__getf2":           Getf2(context),
-			"__trunctfsf2":      Trunctfsf2(context),
-			"prints_l":          PrintsL(context),
-			"__unordtf2":        Unordtf2(context),
-			"__fixunstfsi":      Fixunstfsi(context),
-			"__fixtfsi":         Fixtfsi(context),
-			"eosio_assert_code": AssertCode(context),
-			"db_get_i64":        GetI64(context),
-			"db_remove_i64":     RemoveI64(context),
-		},
-	) */
+		Instantiate(c.context, c.engine); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func (c *ExecutionContext) Exec(code []byte) {
-	module, err := c.engine.InstantiateModuleFromBinary(c.context, code)
+func (c *ExecutionContext) Exec(wasmCode []byte) error {
+	module, err := c.engine.InstantiateModuleFromBinary(c.context, wasmCode)
 
 	if err != nil {
-		panic(fmt.Sprintln("Failed to instantiate the module: ", err))
+		return fmt.Errorf("failed to instantiate the module: %s", err)
 	}
+
+	defer module.Close(c.context)
 
 	c.module = module
 	exportedFunc := module.ExportedFunction("apply")
 
 	if exportedFunc == nil {
-		panic(fmt.Sprintln("Failed to find apply function"))
+		return fmt.Errorf("failed to find apply function")
 	}
 
-	receiver, _ := utils.StringToName("glenn")
-	actionName, _ := utils.StringToName("transfer")
+	receiver := c.applyContext.GetReceiver()
+	code := c.applyContext.GetAction().Account
+	actionName := c.applyContext.GetAction().Name
 
 	start := time.Now()
-	result, resultErr := exportedFunc.Call(c.context, receiver, receiver, actionName)
+	_, resultErr := exportedFunc.Call(c.context, uint64(receiver), uint64(code), uint64(actionName))
 	elapsed := time.Since(start)
-	log.Printf("Binomial took %s", elapsed)
+	log15.Info("Binomial took", "elapsed", elapsed)
 
 	if resultErr != nil {
-		panic(fmt.Sprintln("Execution failed: ", resultErr))
+		return fmt.Errorf("execution failed: %s", resultErr)
 	}
 
-	fmt.Printf("%v", result)
+	return nil
+}
+
+// This function will read an array of bytes from the WASM memory, it panics on purpose when the read is out of range to kill the WASM execution environment
+func (c *ExecutionContext) ReadMemory(start uint32, length uint32) []byte {
+	if data, ok := c.module.Memory().Read(c.context, start, length); !ok {
+		panic("memory read out of range")
+	} else {
+		return data
+	}
+}
+
+// This function will write an array of bytes to the WASM memory, it panics on purpose when the write is out of range to kill the WASM execution environment
+func (c *ExecutionContext) WriteMemory(start uint32, data []byte) {
+	if ok := c.module.Memory().Write(c.context, start, data); !ok {
+		panic("memory write out of range")
+	}
 }

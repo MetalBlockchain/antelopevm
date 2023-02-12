@@ -1,4 +1,4 @@
-package wasm
+package api
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 	log "github.com/inconshreveable/log15"
 )
 
-func GetCryptoFunctions(context *ExecutionContext) map[string]interface{} {
+func GetCryptoFunctions(context Context) map[string]interface{} {
 	functions := make(map[string]interface{})
 
 	functions["assert_recover_key"] = assertRecoverKey(context)
@@ -19,41 +19,25 @@ func GetCryptoFunctions(context *ExecutionContext) map[string]interface{} {
 	functions["assert_sha1"] = assertSha1(context)
 	functions["assert_sha512"] = assertSha512(context)
 	functions["assert_ripemd160"] = assertRipemd160(context)
-	functions["sha1"] = sha1(context)
 	functions["sha256"] = sha256(context)
+	functions["sha1"] = sha1(context)
 	functions["sha512"] = sha512(context)
 	functions["ripemd160"] = ripemd160(context)
 
 	return functions
 }
 
-func assertRecoverKey(context *ExecutionContext) func(uint32, uint32, uint32, uint32, uint32) {
+func assertRecoverKey(context Context) func(uint32, uint32, uint32, uint32, uint32) {
 	return func(digest uint32, signature uint32, signatureLength uint32, publicKey uint32, publicKeyLength uint32) {
 		log.Info("assert_recover_key", "digest", digest, "signature", signature, "signatureLength", signatureLength, "publicKey", publicKey, "publicKeyLength", publicKeyLength)
 
-		digestBytes, ok := context.module.Memory().Read(context.context, digest, 32)
-
-		if !ok {
-			panic("could not read digest bytes")
-		}
-
-		signatureBytes, ok := context.module.Memory().Read(context.context, signature, signatureLength)
-
-		if !ok {
-			panic("could not read signature bytes")
-		}
-
-		publicKeyBytes, ok := context.module.Memory().Read(context.context, publicKey, publicKeyLength)
-
-		if !ok {
-			panic("could not read public key bytes")
-		}
-
+		digestBytes := context.ReadMemory(digest, 32)
+		signatureBytes := context.ReadMemory(signature, signatureLength)
+		publicKeyBytes := context.ReadMemory(publicKey, publicKeyLength)
 		sig := ecc.NewSigNil()
 		pub := ecc.NewPublicKeyNil()
 		rlp.DecodeBytes(signatureBytes, sig)
 		rlp.DecodeBytes(publicKeyBytes, pub)
-
 		check, err := sig.PublicKey(digestBytes)
 
 		if err != nil {
@@ -66,21 +50,12 @@ func assertRecoverKey(context *ExecutionContext) func(uint32, uint32, uint32, ui
 	}
 }
 
-func recoverKey(context *ExecutionContext) func(uint32, uint32, uint32, uint32, uint32) int32 {
+func recoverKey(context Context) func(uint32, uint32, uint32, uint32, uint32) int32 {
 	return func(digest uint32, signature uint32, signatureLength uint32, publicKey uint32, publicKeyLength uint32) int32 {
 		log.Info("recover_key", "digest", digest, "signature", signature, "signatureLength", signatureLength, "publicKey", publicKey, "publicKeyLength", publicKeyLength)
 
-		digestBytes, ok := context.module.Memory().Read(context.context, digest, 32)
-
-		if !ok {
-			panic("could not read digest bytes")
-		}
-
-		signatureBytes, ok := context.module.Memory().Read(context.context, signature, signatureLength)
-
-		if !ok {
-			panic("could not read signature bytes")
-		}
+		digestBytes := context.ReadMemory(digest, 32)
+		signatureBytes := context.ReadMemory(signature, signatureLength)
 
 		sig := ecc.NewSigNil()
 		rlp.DecodeBytes(signatureBytes, sig)
@@ -102,28 +77,18 @@ func recoverKey(context *ExecutionContext) func(uint32, uint32, uint32, uint32, 
 			bufferSize = int(publicKeyLength)
 		}
 
-		context.module.Memory().Write(context.context, publicKey, encoded[0:bufferSize])
+		context.WriteMemory(publicKey, encoded[0:bufferSize])
 
 		return int32(bufferSize)
 	}
 }
 
-func assertSha256(context *ExecutionContext) func(uint32, uint32, uint32) {
+func assertSha256(context Context) func(uint32, uint32, uint32) {
 	return func(data uint32, dataLength uint32, hash uint32) {
 		log.Info("assert_sha256", "data", data, "dataLength", dataLength, "hash", hash)
 
-		dataBytes, ok := context.module.Memory().Read(context.context, data, dataLength)
-
-		if !ok {
-			panic("could not read data bytes")
-		}
-
-		hashBytes, ok := context.module.Memory().Read(context.context, hash, 32)
-
-		if !ok {
-			panic("could not read hash bytes")
-		}
-
+		dataBytes := context.ReadMemory(data, dataLength)
+		hashBytes := context.ReadMemory(hash, 32)
 		s := crypto.NewSha256()
 		s.Write(dataBytes)
 		calculatedHash := s.Sum(nil)
@@ -134,22 +99,12 @@ func assertSha256(context *ExecutionContext) func(uint32, uint32, uint32) {
 	}
 }
 
-func assertSha1(context *ExecutionContext) func(uint32, uint32, uint32) {
+func assertSha1(context Context) func(uint32, uint32, uint32) {
 	return func(data uint32, dataLength uint32, hash uint32) {
 		log.Info("assert_sha1", "data", data, "dataLength", dataLength, "hash", hash)
 
-		dataBytes, ok := context.module.Memory().Read(context.context, data, dataLength)
-
-		if !ok {
-			panic("could not read data bytes")
-		}
-
-		hashBytes, ok := context.module.Memory().Read(context.context, hash, 20)
-
-		if !ok {
-			panic("could not read hash bytes")
-		}
-
+		dataBytes := context.ReadMemory(data, dataLength)
+		hashBytes := context.ReadMemory(hash, 20)
 		s := crypto.NewSha1()
 		s.Write(dataBytes)
 		calculatedHash := s.Sum(nil)
@@ -160,22 +115,12 @@ func assertSha1(context *ExecutionContext) func(uint32, uint32, uint32) {
 	}
 }
 
-func assertSha512(context *ExecutionContext) func(uint32, uint32, uint32) {
+func assertSha512(context Context) func(uint32, uint32, uint32) {
 	return func(data uint32, dataLength uint32, hash uint32) {
 		log.Info("assert_sha512", "data", data, "dataLength", dataLength, "hash", hash)
 
-		dataBytes, ok := context.module.Memory().Read(context.context, data, dataLength)
-
-		if !ok {
-			panic("could not read data bytes")
-		}
-
-		hashBytes, ok := context.module.Memory().Read(context.context, hash, 64)
-
-		if !ok {
-			panic("could not read hash bytes")
-		}
-
+		dataBytes := context.ReadMemory(data, dataLength)
+		hashBytes := context.ReadMemory(hash, 64)
 		s := crypto.NewSha512()
 		s.Write(dataBytes)
 		calculatedHash := s.Sum(nil)
@@ -186,22 +131,12 @@ func assertSha512(context *ExecutionContext) func(uint32, uint32, uint32) {
 	}
 }
 
-func assertRipemd160(context *ExecutionContext) func(uint32, uint32, uint32) {
+func assertRipemd160(context Context) func(uint32, uint32, uint32) {
 	return func(data uint32, dataLength uint32, hash uint32) {
 		log.Info("assert_ripemd160", "data", data, "dataLength", dataLength, "hash", hash)
 
-		dataBytes, ok := context.module.Memory().Read(context.context, data, dataLength)
-
-		if !ok {
-			panic("could not read data bytes")
-		}
-
-		hashBytes, ok := context.module.Memory().Read(context.context, hash, 20)
-
-		if !ok {
-			panic("could not read hash bytes")
-		}
-
+		dataBytes := context.ReadMemory(data, dataLength)
+		hashBytes := context.ReadMemory(hash, 20)
 		s := crypto.NewRipemd160()
 		s.Write(dataBytes)
 		calculatedHash := s.Sum(nil)
@@ -212,82 +147,54 @@ func assertRipemd160(context *ExecutionContext) func(uint32, uint32, uint32) {
 	}
 }
 
-func sha1(context *ExecutionContext) func(uint32, uint32, uint32) {
+func sha1(context Context) func(uint32, uint32, uint32) {
 	return func(data uint32, dataLength uint32, hash uint32) {
 		log.Info("sha1", "data", data, "dataLength", dataLength, "hash", hash)
 
-		dataBytes, ok := context.module.Memory().Read(context.context, data, dataLength)
-
-		if !ok {
-			panic("could not read data bytes")
-		}
-
+		dataBytes := context.ReadMemory(data, dataLength)
 		s := crypto.NewSha1()
 		s.Write(dataBytes)
 		calculatedHash := s.Sum(nil)
 
-		if ok := context.module.Memory().Write(context.context, hash, calculatedHash[0:20]); !ok {
-			panic("could not write sha1 hash to memory")
-		}
+		context.WriteMemory(hash, calculatedHash[0:20])
 	}
 }
 
-func sha256(context *ExecutionContext) func(uint32, uint32, uint32) {
+func sha256(context Context) func(uint32, uint32, uint32) {
 	return func(data uint32, dataLength uint32, hash uint32) {
 		log.Info("sha256", "data", data, "dataLength", dataLength, "hash", hash)
 
-		dataBytes, ok := context.module.Memory().Read(context.context, data, dataLength)
-
-		if !ok {
-			panic("could not read data bytes")
-		}
-
+		dataBytes := context.ReadMemory(data, dataLength)
 		s := crypto.NewSha256()
 		s.Write(dataBytes)
 		calculatedHash := s.Sum(nil)
 
-		if ok := context.module.Memory().Write(context.context, hash, calculatedHash[0:32]); !ok {
-			panic("could not write sha256 hash to memory")
-		}
+		context.WriteMemory(hash, calculatedHash[0:32])
 	}
 }
 
-func sha512(context *ExecutionContext) func(uint32, uint32, uint32) {
+func sha512(context Context) func(uint32, uint32, uint32) {
 	return func(data uint32, dataLength uint32, hash uint32) {
 		log.Info("sha512", "data", data, "dataLength", dataLength, "hash", hash)
 
-		dataBytes, ok := context.module.Memory().Read(context.context, data, dataLength)
-
-		if !ok {
-			panic("could not read data bytes")
-		}
-
+		dataBytes := context.ReadMemory(data, dataLength)
 		s := crypto.NewSha512()
 		s.Write(dataBytes)
 		calculatedHash := s.Sum(nil)
 
-		if ok := context.module.Memory().Write(context.context, hash, calculatedHash[0:64]); !ok {
-			panic("could not write sha512 hash to memory")
-		}
+		context.WriteMemory(hash, calculatedHash[0:64])
 	}
 }
 
-func ripemd160(context *ExecutionContext) func(uint32, uint32, uint32) {
+func ripemd160(context Context) func(uint32, uint32, uint32) {
 	return func(data uint32, dataLength uint32, hash uint32) {
 		log.Info("ripemd160", "data", data, "dataLength", dataLength, "hash", hash)
 
-		dataBytes, ok := context.module.Memory().Read(context.context, data, dataLength)
-
-		if !ok {
-			panic("could not read data bytes")
-		}
-
+		dataBytes := context.ReadMemory(data, dataLength)
 		s := crypto.NewRipemd160()
 		s.Write(dataBytes)
 		calculatedHash := s.Sum(nil)
 
-		if ok := context.module.Memory().Write(context.context, hash, calculatedHash[0:20]); !ok {
-			panic("could not write ripemd160 hash to memory")
-		}
+		context.WriteMemory(hash, calculatedHash[0:20])
 	}
 }
