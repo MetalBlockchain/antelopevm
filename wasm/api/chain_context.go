@@ -34,4 +34,7 @@ type ApplyContext interface {
 	LowerboundI64(code core.AccountName, scope core.ScopeName, table core.TableName, id uint64) (int, error)
 	UpperboundI64(code core.AccountName, scope core.ScopeName, table core.TableName, id uint64) (int, error)
 	EndI64(code core.AccountName, scope core.ScopeName, table core.TableName) (int, error)
+
+	// Console functions
+	ConsoleAppend(value string)
 }
