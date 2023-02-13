@@ -2,8 +2,8 @@ package api
 
 import (
 	"bytes"
-	"math"
 
+	"github.com/MetalBlockchain/antelopevm/utils"
 	log "github.com/inconshreveable/log15"
 )
 
@@ -18,11 +18,11 @@ func GetMemoryFunctions(context Context) map[string]interface{} {
 	return functions
 }
 
-func MemSet(context Context) func(uint32, uint32, uint32) uint32 {
-	return func(dest uint32, value uint32, length uint32) uint32 {
+func MemSet(context Context) func(uint32, int32, uint32) uint32 {
+	return func(dest uint32, value int32, length uint32) uint32 {
 		log.Info("memset", "dest", dest, "value", value, "length", length)
 		destData := context.ReadMemory(dest, length)
-		memset(destData, byte(value), length)
+		memset(destData, byte(value), int(length))
 		return dest
 	}
 }
@@ -30,12 +30,13 @@ func MemSet(context Context) func(uint32, uint32, uint32) uint32 {
 func MemCopy(context Context) func(uint32, uint32, uint32) uint32 {
 	return func(dest uint32, source uint32, length uint32) uint32 {
 		log.Info("memcopy", "dest", dest, "source", source, "length", length)
-		if math.Abs(float64(dest)-float64(source)) < float64(length) {
+		if utils.AbsInt32(int32(dest-source)) < int32(length) {
 			panic("memcpy can only accept non-aliasing pointers")
 		}
 
 		sourceData := context.ReadMemory(source, length)
-		context.WriteMemory(dest, sourceData)
+		destData := context.ReadMemory(dest, length)
+		memcpy(destData, sourceData, length)
 
 		return dest
 	}
@@ -61,24 +62,15 @@ func MemCmp(context Context) func(uint32, uint32, uint32) int32 {
 	}
 }
 
-func memset(dest []byte, value byte, length uint32) {
-	for i := uint32(0); i < length; i++ {
-		dest[i] = value
-	}
+func memset(dest []byte, value byte, length int) {
+	bytes := bytes.Repeat([]byte{value}, length)
+	copy(dest[:length], bytes)
 }
 
 func memcmp(dest []byte, source []byte, length uint32) int32 {
-	result := bytes.Compare(dest[:length], source[:length])
-
-	if result < 0 {
-		return -1
-	} else if result > 0 {
-		return 1
-	}
-
-	return 0
+	return int32(bytes.Compare(dest[:length], source[:length]))
 }
 
 func memcpy(dest []byte, source []byte, length uint32) int {
-	return copy(dest, source[:length])
+	return copy(dest[:length], source[:length])
 }
