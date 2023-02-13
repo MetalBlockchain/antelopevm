@@ -17,7 +17,7 @@ Antelope VM relies on BadgerDB as its key-value store having access to the entir
 | read_action_data          | :white_check_mark: |
 | action_data_size          | :white_check_mark: |
 | current_receiver          | :white_check_mark: |
-| set_action_return_value   | Missing |
+| set_action_return_value   | :white_check_mark: |
 
 ### Authorization functions:
 
@@ -29,11 +29,11 @@ Antelope VM relies on BadgerDB as its key-value store having access to the entir
 | require_recipient         | :white_check_mark: |
 | is_account                | :white_check_mark: |
 
-
 ### Context-free system functions:
 
 | Name                      | Status  |
 | ------------------------- |:-------:|
+| abort                     | :white_check_mark: |
 | eosio_assert              | :white_check_mark: |
 | eosio_assert_message      | :white_check_mark: |
 | eosio_assert_code         | :white_check_mark: |
@@ -71,16 +71,6 @@ Antelope VM relies on BadgerDB as its key-value store having access to the entir
 | Name                      | Status  |
 | ------------------------- |:-------:|
 | get_context_free_data     | Missing |
-
-| send_inline               | Missing            |
-| send_context_free_inline  | Missing            |
-| publication_time          | Missing            |
-
-### Chain functions:
-
-| Name                      | Status  |
-| ------------------------- |:-------:|
-| get_active_producers      | Missing |
 
 ### Crypto functions:
 

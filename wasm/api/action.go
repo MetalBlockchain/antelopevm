@@ -1,12 +1,17 @@
 package api
 
-import log "github.com/inconshreveable/log15"
+import (
+	"github.com/MetalBlockchain/antelopevm/core"
+	log "github.com/inconshreveable/log15"
+)
 
 func GetActionFunctions(context Context) map[string]interface{} {
 	functions := make(map[string]interface{})
 
 	functions["read_action_data"] = readActionData(context)
 	functions["action_data_size"] = actionDataSize(context)
+	functions["current_receiver"] = currentReceiver(context)
+	functions["set_action_return_value"] = setActionReturnValue(context)
 
 	return functions
 }
@@ -25,9 +30,24 @@ func readActionData(context Context) func(uint32, uint32) uint32 {
 	}
 }
 
-func actionDataSize(context Context) func() int32 {
-	return func() int32 {
+func actionDataSize(context Context) func() uint32 {
+	return func() uint32 {
 		log.Info("action_data_size", "length", len(context.GetApplyContext().GetAction().Data))
-		return int32(len(context.GetApplyContext().GetAction().Data))
+		return uint32(len(context.GetApplyContext().GetAction().Data))
+	}
+}
+
+func currentReceiver(context Context) func() core.AccountName {
+	return func() core.AccountName {
+		log.Info("current_receiver", "receiver", context.GetApplyContext().GetReceiver().String())
+		return context.GetApplyContext().GetReceiver()
+	}
+}
+
+func setActionReturnValue(context Context) func(uint32, uint32) {
+	return func(ptr uint32, length uint32) {
+		log.Info("set_action_return_value", "ptr", ptr, "length", length)
+		data := context.ReadMemory(ptr, length)
+		context.GetApplyContext().SetActionReturnValue(data)
 	}
 }
