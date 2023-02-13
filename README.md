@@ -16,16 +16,65 @@ Antelope VM relies on BadgerDB as its key-value store having access to the entir
 | ------------------------- |:-------:|
 | read_action_data          | :white_check_mark: |
 | action_data_size          | :white_check_mark: |
-| require_recipient         | :white_check_mark: |
+| current_receiver          | :white_check_mark: |
+| set_action_return_value   | Missing |
+
+### Authorization functions:
+
+| Name                      | Status  |
+| ------------------------- |:-------:|
 | require_auth              | :white_check_mark: |
 | has_auth                  | :white_check_mark: |
 | require_auth2             | :white_check_mark: |
+| require_recipient         | :white_check_mark: |
 | is_account                | :white_check_mark: |
+
+
+### Context-free system functions:
+
+| Name                      | Status  |
+| ------------------------- |:-------:|
+| eosio_assert              | :white_check_mark: |
+| eosio_assert_message      | :white_check_mark: |
+| eosio_assert_code         | :white_check_mark: |
+| eosio_exit                | :white_check_mark: |
+
+### Context-free transaction functions:
+
+| Name                      | Status  |
+| ------------------------- |:-------:|
+| read_transaction          | Missing |
+| transaction_size          | Missing |
+| expiration                | Missing |
+| tapos_block_num           | Missing |
+| tapos_block_prefix        | Missing |
+| get_action                | Missing |
+
+### Console functions:
+
+| Name                      | Status  |
+| ------------------------- |:-------:|
+| prints                    | :white_check_mark: |
+| prints_l                  | :white_check_mark: |
+| printi                    | :white_check_mark: |
+| printui                   | :white_check_mark: |
+| printi128                 | :white_check_mark: |
+| printui128                | :white_check_mark: |
+| printsf                   | :white_check_mark: |
+| printdf                   | :white_check_mark: |
+| printqf                   | :white_check_mark: |
+| printn                    | :white_check_mark: |
+| printhex                  | :white_check_mark: |
+
+### Context-free functions:
+
+| Name                      | Status  |
+| ------------------------- |:-------:|
+| get_context_free_data     | Missing |
+
 | send_inline               | Missing            |
 | send_context_free_inline  | Missing            |
 | publication_time          | Missing            |
-| current_receiver          | :white_check_mark: |
-| set_action_return_value   | Missing |
 
 ### Chain functions:
 
@@ -47,17 +96,13 @@ Antelope VM relies on BadgerDB as its key-value store having access to the entir
 | sha256                    | :white_check_mark: |
 | sha512                    | :white_check_mark: |
 | ripemd160                 | :white_check_mark: |
-
-### Transaction functions:
-
-| Name                      | Status  |
-| ------------------------- |:-------:|
-| read_transaction          | Missing |
-| transaction_size          | Missing |
-| expiration                | Missing |
-| tapos_block_num           | Missing |
-| tapos_block_prefix        | Missing |
-| get_action                | Missing |
+| alt_bn128_add                 | Missing |
+| alt_bn128_mul                 | Missing |
+| alt_bn128_pair                 | Missing |
+| mod_exp                 | Missing |
+| blake2_f                 | Missing |
+| sha3                 | Missing |
+| k1_recover                 | Missing |
 
 ### Database functions:
 
@@ -123,26 +168,6 @@ Antelope VM relies on BadgerDB as its key-value store having access to the entir
 | db_idx_long_double_next                | Missing |
 | db_idx_long_double_previous                | Missing |
 
-### Map functions:
-
-| Name                      | Status  |
-| ------------------------- |:-------:|
-| kv_erase              | Missing |
-| kv_set          | Missing |
-| kv_get      | Missing |
-| kv_get_data                | Missing |
-| kv_it_create                | Missing |
-| kv_it_destroy                | Missing |
-| kv_it_status                | Missing |
-| kv_it_compare                | Missing |
-| kv_it_key_compare                | Missing |
-| kv_it_move_to_end                | Missing |
-| kv_it_next                | Missing |
-| kv_it_prev                | Missing |
-| kv_it_lower_bound                | Missing |
-| kv_it_key                | Missing |
-| kv_it_value                | Missing |
-
 ### Memory functions:
 
 | Name                      | Status      |
@@ -161,63 +186,50 @@ Antelope VM relies on BadgerDB as its key-value store having access to the entir
 | get_permission_last_used          | :white_check_mark: |
 | get_account_creation_time         | :white_check_mark: |
 
-### Print functions:
-
-| Name                      | Status  |
-| ------------------------- |:-------:|
-| prints                    | :white_check_mark: |
-| prints_l                  | :white_check_mark: |
-| printi                    | :white_check_mark: |
-| printui                   | :white_check_mark: |
-| printi128                 | :white_check_mark: |
-| printui128                | :white_check_mark: |
-| printsf                   | :white_check_mark: |
-| printdf                   | :white_check_mark: |
-| printqf                   | :white_check_mark: |
-| printn                    | :white_check_mark: |
-| printhex                  | :white_check_mark: |
-
 ### Privileged functions:
 
 | Name                              | Status  |
 | --------------------------------- |:-------:|
-| get_resource_limits               | Missing |
-| set_resource_limits               | Missing |
-| set_proposed_producers            | Missing |
-| set_proposed_producers_ex         | Missing |
-| is_privileged                     | Missing |
-| set_privileged                    | Missing |
-| set_blockchain_parameters_packed  | Missing |
-| get_blockchain_parameters_packed  | Missing |
-| set_kv_parameters_packed          | Missing |
+| is_feature_active               | Missing |
 | preactivate_feature               | Missing |
+| set_resource_limits               | Missing |
+| get_resource_limits            | Missing |
+| set_proposed_producers_common         | Missing |
+| get_wasm_parameters_packed                     | Missing |
+| set_wasm_parameters_packed                    | Missing |
+| set_proposed_producers  | Missing |
+| set_proposed_producers_ex  | Missing |
+| get_blockchain_parameters_packed          | Missing |
+| set_blockchain_parameters_packed               | Missing |
+| get_parameters_packed               | Missing |
+| set_parameters_packed               | Missing |
+| is_privileged               | Missing |
+| set_privileged               | Missing |
+
+### Producer functions:
+
+| Name                              | Status  |
+| --------------------------------- |:-------:|
+| get_active_producers              | Missing |
 
 ### System functions:
 
 | Name                      | Status  |
 | ------------------------- |:-------:|
-| eosio_assert              | :white_check_mark: |
-| eosio_assert_message      | :white_check_mark: |
-| eosio_assert_code         | :white_check_mark: |
-| eosio_exit                | :white_check_mark: |
 | current_time              | :white_check_mark: |
+| publication_time          | Missing |
 | is_feature_activated      | :white_check_mark: |
 | get_sender                | :white_check_mark: |
-| abort                     | :white_check_mark: |
+| get_block_num             | Missing |
 
 ### Transaction functions:
 
 | Name                      | Status  |
 | ------------------------- |:-------:|
+| send_inline               | Missing |
+| send_context_free_inline  | Missing |
 | send_deferred             | Missing |
 | cancel_deferred           | Missing |
-| read_transaction         | :white_check_mark: |
-| transaction_size                | :white_check_mark: |
-| tapos_block_num              | :white_check_mark: |
-| tapos_block_prefix      | :white_check_mark: |
-| expiration                | :white_check_mark: |
-| get_action                | :white_check_mark: |
-| get_context_free_data                | :white_check_mark: |
 
 ### Compiler builtins:
 
