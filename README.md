@@ -16,14 +16,14 @@ Antelope VM relies on BadgerDB as its key-value store having access to the entir
 | ------------------------- |:-------:|
 | read_action_data          | :white_check_mark: |
 | action_data_size          | :white_check_mark: |
-| require_recipient         | Missing            |
+| require_recipient         | :white_check_mark: |
 | require_auth              | :white_check_mark: |
 | has_auth                  | :white_check_mark: |
 | require_auth2             | :white_check_mark: |
 | is_account                | :white_check_mark: |
-| send_inline               | Missing                   |
-| send_context_free_inline  | Missing                   |
-| publication_time          | Missing                   |
+| send_inline               | Missing            |
+| send_context_free_inline  | Missing            |
+| publication_time          | Missing            |
 | current_receiver          | :white_check_mark: |
 | set_action_return_value   | Missing |
 
@@ -68,10 +68,10 @@ Antelope VM relies on BadgerDB as its key-value store having access to the entir
 | db_remove_i64             | :white_check_mark: |
 | db_get_i64                | :white_check_mark: |
 | db_next_i64               | :white_check_mark: |
-| db_previous_i64           | Missing |
+| db_previous_i64           | :white_check_mark: |
 | db_find_i64               | :white_check_mark: |
-| db_lowerbound_i64         | Missing |
-| db_upperbound_i64         | Missing |
+| db_lowerbound_i64         | :white_check_mark: |
+| db_upperbound_i64         | :white_check_mark: |
 | db_idx64_store            | Missing |
 | db_idx64_update           | Missing |
 | db_idx64_remove           | Missing |
@@ -156,26 +156,26 @@ Antelope VM relies on BadgerDB as its key-value store having access to the entir
 
 | Name                              | Status  |
 | --------------------------------- |:-------:|
-| check_transaction_authorization   | Missing |
-| check_permission_authorization    | Missing |
-| get_permission_last_used          | Missing |
-| get_account_creation_time         | Missing |
+| check_transaction_authorization   | :white_check_mark: |
+| check_permission_authorization    | :white_check_mark: |
+| get_permission_last_used          | :white_check_mark: |
+| get_account_creation_time         | :white_check_mark: |
 
 ### Print functions:
 
 | Name                      | Status  |
 | ------------------------- |:-------:|
-| prints                    | Missing |
-| prints_l                  | Missing |
-| printi                    | Missing |
-| printui                   | Missing |
-| printi128                 | Missing |
-| printui128                | Missing |
-| printsf                   | Missing |
-| printdf                   | Missing |
-| printqf                   | Missing |
-| printn                    | Missing |
-| printhex                  | Missing |
+| prints                    | :white_check_mark: |
+| prints_l                  | :white_check_mark: |
+| printi                    | :white_check_mark: |
+| printui                   | :white_check_mark: |
+| printi128                 | :white_check_mark: |
+| printui128                | :white_check_mark: |
+| printsf                   | :white_check_mark: |
+| printdf                   | :white_check_mark: |
+| printqf                   | :white_check_mark: |
+| printn                    | :white_check_mark: |
+| printhex                  | :white_check_mark: |
 
 ### Privileged functions:
 
