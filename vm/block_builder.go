@@ -42,7 +42,7 @@ func (b *BlockBuilder) Build() {
 	for {
 		select {
 		case <-b.vm.mempool.Pending:
-			b.signalTxsReady()
+			b.markBuilding()
 		case <-b.builderStop:
 			return
 		case <-b.stop:
@@ -55,7 +55,7 @@ func (b *BlockBuilder) HandleGenerateBlock() {
 	b.status = dontBuild
 }
 
-func (b *BlockBuilder) signalTxsReady() {
+func (b *BlockBuilder) buildBlock() {
 	b.l.Lock()
 	defer b.l.Unlock()
 

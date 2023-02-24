@@ -1,6 +1,7 @@
 package api
 
 type Context interface {
+	GetController() Controller
 	GetApplyContext() ApplyContext
 	GetAuthorizationManager() AuthorizationManager
 	ReadMemory(start uint32, length uint32) []byte

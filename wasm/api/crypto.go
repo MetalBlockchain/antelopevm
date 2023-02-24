@@ -7,7 +7,6 @@ import (
 	"github.com/MetalBlockchain/antelopevm/crypto"
 	"github.com/MetalBlockchain/antelopevm/crypto/ecc"
 	"github.com/MetalBlockchain/antelopevm/crypto/rlp"
-	log "github.com/inconshreveable/log15"
 )
 
 func GetCryptoFunctions(context Context) map[string]interface{} {
@@ -29,8 +28,6 @@ func GetCryptoFunctions(context Context) map[string]interface{} {
 
 func assertRecoverKey(context Context) func(uint32, uint32, uint32, uint32, uint32) {
 	return func(digest uint32, signature uint32, signatureLength uint32, publicKey uint32, publicKeyLength uint32) {
-		log.Info("assert_recover_key", "digest", digest, "signature", signature, "signatureLength", signatureLength, "publicKey", publicKey, "publicKeyLength", publicKeyLength)
-
 		digestBytes := context.ReadMemory(digest, 32)
 		signatureBytes := context.ReadMemory(signature, signatureLength)
 		publicKeyBytes := context.ReadMemory(publicKey, publicKeyLength)
@@ -52,8 +49,6 @@ func assertRecoverKey(context Context) func(uint32, uint32, uint32, uint32, uint
 
 func recoverKey(context Context) func(uint32, uint32, uint32, uint32, uint32) int32 {
 	return func(digest uint32, signature uint32, signatureLength uint32, publicKey uint32, publicKeyLength uint32) int32 {
-		log.Info("recover_key", "digest", digest, "signature", signature, "signatureLength", signatureLength, "publicKey", publicKey, "publicKeyLength", publicKeyLength)
-
 		digestBytes := context.ReadMemory(digest, 32)
 		signatureBytes := context.ReadMemory(signature, signatureLength)
 
@@ -85,8 +80,6 @@ func recoverKey(context Context) func(uint32, uint32, uint32, uint32, uint32) in
 
 func assertSha256(context Context) func(uint32, uint32, uint32) {
 	return func(data uint32, dataLength uint32, hash uint32) {
-		log.Info("assert_sha256", "data", data, "dataLength", dataLength, "hash", hash)
-
 		dataBytes := context.ReadMemory(data, dataLength)
 		hashBytes := context.ReadMemory(hash, 32)
 		s := crypto.NewSha256()
@@ -101,8 +94,6 @@ func assertSha256(context Context) func(uint32, uint32, uint32) {
 
 func assertSha1(context Context) func(uint32, uint32, uint32) {
 	return func(data uint32, dataLength uint32, hash uint32) {
-		log.Info("assert_sha1", "data", data, "dataLength", dataLength, "hash", hash)
-
 		dataBytes := context.ReadMemory(data, dataLength)
 		hashBytes := context.ReadMemory(hash, 20)
 		s := crypto.NewSha1()
@@ -117,8 +108,6 @@ func assertSha1(context Context) func(uint32, uint32, uint32) {
 
 func assertSha512(context Context) func(uint32, uint32, uint32) {
 	return func(data uint32, dataLength uint32, hash uint32) {
-		log.Info("assert_sha512", "data", data, "dataLength", dataLength, "hash", hash)
-
 		dataBytes := context.ReadMemory(data, dataLength)
 		hashBytes := context.ReadMemory(hash, 64)
 		s := crypto.NewSha512()
@@ -133,8 +122,6 @@ func assertSha512(context Context) func(uint32, uint32, uint32) {
 
 func assertRipemd160(context Context) func(uint32, uint32, uint32) {
 	return func(data uint32, dataLength uint32, hash uint32) {
-		log.Info("assert_ripemd160", "data", data, "dataLength", dataLength, "hash", hash)
-
 		dataBytes := context.ReadMemory(data, dataLength)
 		hashBytes := context.ReadMemory(hash, 20)
 		s := crypto.NewRipemd160()
@@ -149,8 +136,6 @@ func assertRipemd160(context Context) func(uint32, uint32, uint32) {
 
 func sha1(context Context) func(uint32, uint32, uint32) {
 	return func(data uint32, dataLength uint32, hash uint32) {
-		log.Info("sha1", "data", data, "dataLength", dataLength, "hash", hash)
-
 		dataBytes := context.ReadMemory(data, dataLength)
 		s := crypto.NewSha1()
 		s.Write(dataBytes)
@@ -162,8 +147,6 @@ func sha1(context Context) func(uint32, uint32, uint32) {
 
 func sha256(context Context) func(uint32, uint32, uint32) {
 	return func(data uint32, dataLength uint32, hash uint32) {
-		log.Info("sha256", "data", data, "dataLength", dataLength, "hash", hash)
-
 		dataBytes := context.ReadMemory(data, dataLength)
 		s := crypto.NewSha256()
 		s.Write(dataBytes)
@@ -175,8 +158,6 @@ func sha256(context Context) func(uint32, uint32, uint32) {
 
 func sha512(context Context) func(uint32, uint32, uint32) {
 	return func(data uint32, dataLength uint32, hash uint32) {
-		log.Info("sha512", "data", data, "dataLength", dataLength, "hash", hash)
-
 		dataBytes := context.ReadMemory(data, dataLength)
 		s := crypto.NewSha512()
 		s.Write(dataBytes)
@@ -188,8 +169,6 @@ func sha512(context Context) func(uint32, uint32, uint32) {
 
 func ripemd160(context Context) func(uint32, uint32, uint32) {
 	return func(data uint32, dataLength uint32, hash uint32) {
-		log.Info("ripemd160", "data", data, "dataLength", dataLength, "hash", hash)
-
 		dataBytes := context.ReadMemory(data, dataLength)
 		s := crypto.NewRipemd160()
 		s.Write(dataBytes)

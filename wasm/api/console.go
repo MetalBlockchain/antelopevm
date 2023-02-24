@@ -8,7 +8,6 @@ import (
 	"github.com/MetalBlockchain/antelopevm/core"
 	"github.com/MetalBlockchain/antelopevm/crypto/rlp"
 	antelopeMath "github.com/MetalBlockchain/antelopevm/math"
-	log "github.com/inconshreveable/log15"
 )
 
 func GetConsoleFunctions(context Context) map[string]interface{} {
@@ -31,7 +30,6 @@ func GetConsoleFunctions(context Context) map[string]interface{} {
 
 func prints(context Context) func(uint32) {
 	return func(ptr uint32) {
-		log.Info("prints", "ptr", ptr)
 		data := context.ReadMemory(ptr, 512)
 		var size uint32
 
@@ -50,7 +48,6 @@ func prints(context Context) func(uint32) {
 
 func prints_l(context Context) func(uint32, uint32) {
 	return func(ptr uint32, length uint32) {
-		log.Info("prints_l", "ptr", ptr, "length", length)
 		data := context.ReadMemory(ptr, length)
 		text := string(data)
 		context.GetApplyContext().ConsoleAppend(text)
@@ -59,7 +56,6 @@ func prints_l(context Context) func(uint32, uint32) {
 
 func printi(context Context) func(int64) {
 	return func(value int64) {
-		log.Info("printi", "value", value)
 		text := strconv.FormatInt(value, 10)
 		context.GetApplyContext().ConsoleAppend(text)
 	}
@@ -67,7 +63,6 @@ func printi(context Context) func(int64) {
 
 func printui(context Context) func(uint64) {
 	return func(value uint64) {
-		log.Info("printui", "value", value)
 		text := strconv.FormatUint(value, 10)
 		context.GetApplyContext().ConsoleAppend(text)
 	}
@@ -75,7 +70,6 @@ func printui(context Context) func(uint64) {
 
 func printi128(context Context) func(uint32, uint32) {
 	return func(ptr uint32, length uint32) {
-		log.Info("printi128", "ptr", ptr, "length", length)
 		data := context.ReadMemory(ptr, length)
 		var value antelopeMath.Int128
 
@@ -89,7 +83,6 @@ func printi128(context Context) func(uint32, uint32) {
 
 func printui128(context Context) func(uint32, uint32) {
 	return func(ptr uint32, length uint32) {
-		log.Info("printui128", "ptr", ptr, "length", length)
 		data := context.ReadMemory(ptr, length)
 		var value antelopeMath.Uint128
 
@@ -103,7 +96,6 @@ func printui128(context Context) func(uint32, uint32) {
 
 func printsf(context Context) func(uint32) {
 	return func(value uint32) {
-		log.Info("printsf", "value", value)
 		val := math.Float32frombits(value)
 		text := strconv.FormatFloat(float64(val), 'e', 6, 32)
 		context.GetApplyContext().ConsoleAppend(text)
@@ -112,7 +104,6 @@ func printsf(context Context) func(uint32) {
 
 func printdf(context Context) func(uint64) {
 	return func(value uint64) {
-		log.Info("printdf", "value", value)
 		val := math.Float64frombits(value)
 		text := strconv.FormatFloat(val, 'e', 15, 64)
 		context.GetApplyContext().ConsoleAppend(text)
@@ -121,7 +112,6 @@ func printdf(context Context) func(uint64) {
 
 func printqf(context Context) func(uint32, uint32) {
 	return func(ptr uint32, length uint32) {
-		log.Info("printqf", "ptr", ptr, "length", length)
 		data := context.ReadMemory(ptr, length)
 		var value antelopeMath.Float128
 
@@ -135,14 +125,12 @@ func printqf(context Context) func(uint32, uint32) {
 
 func printn(context Context) func(core.Name) {
 	return func(value core.Name) {
-		log.Info("printn", "value", value)
 		context.GetApplyContext().ConsoleAppend(value.String())
 	}
 }
 
 func printhex(context Context) func(uint32, uint32) {
 	return func(ptr uint32, length uint32) {
-		log.Info("printhex", "ptr", ptr, "length", length)
 		data := context.ReadMemory(ptr, length)
 		text := hex.EncodeToString(data)
 		context.GetApplyContext().ConsoleAppend(text)

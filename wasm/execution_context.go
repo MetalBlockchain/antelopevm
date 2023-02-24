@@ -6,7 +6,6 @@ import (
 	"time"
 
 	wasmApi "github.com/MetalBlockchain/antelopevm/wasm/api"
-	"github.com/inconshreveable/log15"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
 )
@@ -14,32 +13,44 @@ import (
 var _ wasmApi.Context = &ExecutionContext{}
 
 type ExecutionContext struct {
-	context      context.Context
-	engine       wazero.Runtime
-	module       api.Module
-	applyContext wasmApi.ApplyContext
+	context              context.Context
+	cancelFunc           context.CancelFunc
+	engine               wazero.Runtime
+	module               api.Module
+	controller           wasmApi.Controller
+	applyContext         wasmApi.ApplyContext
+	authorizationManager wasmApi.AuthorizationManager
 }
 
-func NewWasmExecutionContext(context context.Context, applyContext wasmApi.ApplyContext) *ExecutionContext {
+func NewWasmExecutionContext(context context.Context, controller wasmApi.Controller, applyContext wasmApi.ApplyContext, authorizationManager wasmApi.AuthorizationManager) *ExecutionContext {
 	return &ExecutionContext{
-		context:      context,
-		applyContext: applyContext,
+		context:              context,
+		controller:           controller,
+		applyContext:         applyContext,
+		authorizationManager: authorizationManager,
 	}
 }
 
 func (c *ExecutionContext) Initialize() error {
-	c.context = context.Background()
+	c.context, c.cancelFunc = context.WithTimeout(context.Background(), 32*time.Nanosecond)
 	c.engine = wazero.NewRuntime(c.context)
 
 	if _, err := c.engine.NewHostModuleBuilder("env").
-		ExportFunctions(wasmApi.GetAccountFunctions(c)).
-		ExportFunctions(wasmApi.GetMemoryFunctions(c)).
-		ExportFunctions(GetConsoleFunctions(c)).
 		ExportFunctions(wasmApi.GetActionFunctions(c)).
+		ExportFunctions(wasmApi.GetAccountFunctions(c)).
+		ExportFunctions(wasmApi.GetContextFreeSystemFunctions(c)).
+		ExportFunctions(wasmApi.GetContextFreeTransactionFunctions(c)).
+		ExportFunctions(wasmApi.GetMemoryFunctions(c)).
+		ExportFunctions(wasmApi.GetConsoleFunctions(c)).
+		ExportFunctions(wasmApi.GetContextFreeFunctions(c)).
 		ExportFunctions(GetMathFunctions(c)).
 		ExportFunctions(GetSystemFunctions(c)).
-		ExportFunctions(GetDatabaseFunctions(c)).
+		ExportFunctions(wasmApi.GetDatabaseFunctions(c)).
 		ExportFunctions(wasmApi.GetCryptoFunctions(c)).
+		ExportFunctions(wasmApi.GetPermissionFunctions(c)).
+		ExportFunctions(wasmApi.GetPrivilegedFunctions(c)).
+		ExportFunctions(wasmApi.GetProducerFunctions(c)).
+		ExportFunctions(wasmApi.GetTransactionFunctions(c)).
 		ExportFunction("__extendsftf2", Extendsftf2(c)).
 		ExportFunction("__floatsitf", Floatsitf(c)).
 		ExportFunction("__multf3", Multf3(c)).
@@ -83,11 +94,7 @@ func (c *ExecutionContext) Exec(wasmCode []byte) error {
 	receiver := c.applyContext.GetReceiver()
 	code := c.applyContext.GetAction().Account
 	actionName := c.applyContext.GetAction().Name
-
-	start := time.Now()
 	_, resultErr := exportedFunc.Call(c.context, uint64(receiver), uint64(code), uint64(actionName))
-	elapsed := time.Since(start)
-	log15.Info("Binomial took", "elapsed", elapsed)
 
 	if resultErr != nil {
 		return fmt.Errorf("execution failed: %s", resultErr)
@@ -112,6 +119,23 @@ func (c *ExecutionContext) WriteMemory(start uint32, data []byte) {
 	}
 }
 
+func (c *ExecutionContext) GetMemorySize() uint32 {
+	return c.module.Memory().Size(c.context)
+}
+
+func (c *ExecutionContext) GetController() wasmApi.Controller {
+	return c.controller
+}
+
 func (c *ExecutionContext) GetApplyContext() wasmApi.ApplyContext {
 	return c.applyContext
+}
+
+func (c *ExecutionContext) GetAuthorizationManager() wasmApi.AuthorizationManager {
+	return c.authorizationManager
+}
+
+// Shutdown kills the running WASM context
+func (c *ExecutionContext) Shutdown() {
+	c.cancelFunc()
 }

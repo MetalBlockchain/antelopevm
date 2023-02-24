@@ -4,7 +4,6 @@ import (
 	"bytes"
 
 	"github.com/MetalBlockchain/antelopevm/utils"
-	log "github.com/inconshreveable/log15"
 )
 
 func GetMemoryFunctions(context Context) map[string]interface{} {
@@ -20,7 +19,6 @@ func GetMemoryFunctions(context Context) map[string]interface{} {
 
 func MemSet(context Context) func(uint32, int32, uint32) uint32 {
 	return func(dest uint32, value int32, length uint32) uint32 {
-		log.Info("memset", "dest", dest, "value", value, "length", length)
 		destData := context.ReadMemory(dest, length)
 		memset(destData, byte(value), int(length))
 		return dest
@@ -29,7 +27,6 @@ func MemSet(context Context) func(uint32, int32, uint32) uint32 {
 
 func MemCopy(context Context) func(uint32, uint32, uint32) uint32 {
 	return func(dest uint32, source uint32, length uint32) uint32 {
-		log.Info("memcopy", "dest", dest, "source", source, "length", length)
 		if utils.AbsInt32(int32(dest-source)) < int32(length) {
 			panic("memcpy can only accept non-aliasing pointers")
 		}
@@ -44,7 +41,6 @@ func MemCopy(context Context) func(uint32, uint32, uint32) uint32 {
 
 func MemMove(context Context) func(uint32, uint32, uint32) uint32 {
 	return func(dest uint32, source uint32, length uint32) uint32 {
-		log.Info("memmove", "dest", dest, "source", source, "length", length)
 		sourceData := context.ReadMemory(source, length)
 		destData := context.ReadMemory(dest, length)
 		memcpy(destData, sourceData, length)
@@ -54,7 +50,6 @@ func MemMove(context Context) func(uint32, uint32, uint32) uint32 {
 
 func MemCmp(context Context) func(uint32, uint32, uint32) int32 {
 	return func(dest uint32, source uint32, length uint32) int32 {
-		log.Info("memcmp", "dest", dest, "source", source, "length", length)
 		sourceData := context.ReadMemory(source, length)
 		destData := context.ReadMemory(dest, length)
 

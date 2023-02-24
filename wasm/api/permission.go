@@ -5,7 +5,6 @@ import (
 	"github.com/MetalBlockchain/antelopevm/crypto/ecc"
 	"github.com/MetalBlockchain/antelopevm/crypto/rlp"
 	"github.com/hashicorp/go-set"
-	log "github.com/inconshreveable/log15"
 )
 
 func GetPermissionFunctions(context Context) map[string]interface{} {
@@ -21,8 +20,6 @@ func GetPermissionFunctions(context Context) map[string]interface{} {
 
 func checkTransactionAuthorization(context Context) func(uint32, uint32, uint32, uint32, uint32, uint32) int32 {
 	return func(trxPtr uint32, trxSize uint32, pubKeys uint32, pubKeysSize uint32, perms uint32, permsSize uint32) int32 {
-		log.Info("check_transaction_authorization", "trxPtr", trxPtr, "trxSize", trxSize, "pubKeys", pubKeys, "pubKeysSize", pubKeysSize, "perms", perms, "permsSize", permsSize)
-
 		trxDataBytes := context.ReadMemory(trxPtr, trxSize)
 		pubKeysBytes := context.ReadMemory(pubKeys, pubKeysSize)
 		permsBytes := context.ReadMemory(perms, permsSize)

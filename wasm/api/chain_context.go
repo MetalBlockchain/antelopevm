@@ -1,9 +1,15 @@
 package api
 
 import (
+	"github.com/MetalBlockchain/antelopevm/config"
 	"github.com/MetalBlockchain/antelopevm/core"
+	"github.com/MetalBlockchain/antelopevm/core/account"
 	"github.com/MetalBlockchain/antelopevm/crypto/ecc"
 )
+
+type Controller interface {
+	GetConfig() *config.Config
+}
 
 type AuthorizationManager interface {
 	GetPermission(level core.PermissionLevel) (*core.Permission, error)
@@ -16,7 +22,7 @@ type ApplyContext interface {
 	RequireRecipient(recipient core.AccountName) error
 	RequireAuthorizationWithPermission(account core.AccountName, permission core.PermissionName) error
 	HasAuthorization(account core.AccountName) bool
-	FindAccount(account core.AccountName) (*core.Account, error)
+	FindAccount(account core.AccountName) (*account.Account, error)
 	IsAccount(account core.AccountName) bool
 	GetSender() (*core.ActionName, error)
 
@@ -37,4 +43,16 @@ type ApplyContext interface {
 
 	// Console functions
 	ConsoleAppend(value string)
+
+	SetActionReturnValue(value []byte)
+	GetPackedTransaction() *core.PackedTransaction
+
+	// Transaction functions
+	ExecuteInline(action core.Action) error
+}
+
+func eosAssert(condition bool, msg string) {
+	if !condition {
+		panic(msg)
+	}
 }

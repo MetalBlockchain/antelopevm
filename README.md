@@ -43,12 +43,12 @@ Antelope VM relies on BadgerDB as its key-value store having access to the entir
 
 | Name                      | Status  |
 | ------------------------- |:-------:|
-| read_transaction          | Missing |
-| transaction_size          | Missing |
-| expiration                | Missing |
-| tapos_block_num           | Missing |
-| tapos_block_prefix        | Missing |
-| get_action                | Missing |
+| read_transaction          | :white_check_mark: |
+| transaction_size          | :white_check_mark: |
+| expiration                | :white_check_mark: |
+| tapos_block_num           | :white_check_mark: |
+| tapos_block_prefix        | :white_check_mark: |
+| get_action                | :white_check_mark: |
 
 ### Console functions:
 
@@ -70,7 +70,7 @@ Antelope VM relies on BadgerDB as its key-value store having access to the entir
 
 | Name                      | Status  |
 | ------------------------- |:-------:|
-| get_context_free_data     | Missing |
+| get_context_free_data     | :white_check_mark: |
 
 ### Crypto functions:
 
@@ -184,7 +184,6 @@ Antelope VM relies on BadgerDB as its key-value store having access to the entir
 | preactivate_feature               | Missing |
 | set_resource_limits               | Missing |
 | get_resource_limits            | Missing |
-| set_proposed_producers_common         | Missing |
 | get_wasm_parameters_packed                     | Missing |
 | set_wasm_parameters_packed                    | Missing |
 | set_proposed_producers  | Missing |
