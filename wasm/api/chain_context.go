@@ -51,6 +51,10 @@ type ApplyContext interface {
 	ExecuteInline(action core.Action) error
 }
 
+type MultiIndex interface {
+	StoreIdx64(scope core.ScopeName, tableName core.TableName, payer core.AccountName, primaryKey uint64, secondaryKey uint64) (int, error)
+}
+
 func eosAssert(condition bool, msg string) {
 	if !condition {
 		panic(msg)

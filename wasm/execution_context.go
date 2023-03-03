@@ -20,14 +20,16 @@ type ExecutionContext struct {
 	controller           wasmApi.Controller
 	applyContext         wasmApi.ApplyContext
 	authorizationManager wasmApi.AuthorizationManager
+	multiIndex           wasmApi.MultiIndex
 }
 
-func NewWasmExecutionContext(context context.Context, controller wasmApi.Controller, applyContext wasmApi.ApplyContext, authorizationManager wasmApi.AuthorizationManager) *ExecutionContext {
+func NewWasmExecutionContext(context context.Context, controller wasmApi.Controller, applyContext wasmApi.ApplyContext, authorizationManager wasmApi.AuthorizationManager, multiIndex wasmApi.MultiIndex) *ExecutionContext {
 	return &ExecutionContext{
 		context:              context,
 		controller:           controller,
 		applyContext:         applyContext,
 		authorizationManager: authorizationManager,
+		multiIndex:           multiIndex,
 	}
 }
 
@@ -133,6 +135,10 @@ func (c *ExecutionContext) GetApplyContext() wasmApi.ApplyContext {
 
 func (c *ExecutionContext) GetAuthorizationManager() wasmApi.AuthorizationManager {
 	return c.authorizationManager
+}
+
+func (c *ExecutionContext) GetMultiIndex() wasmApi.MultiIndex {
+	return c.multiIndex
 }
 
 // Shutdown kills the running WASM context
