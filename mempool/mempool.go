@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/inconshreveable/log15"
+	log "github.com/inconshreveable/log15"
 )
 
 type Mempool struct {
@@ -29,25 +29,25 @@ func New(maxSize int) *Mempool {
 }
 
 func (th *Mempool) Add(tx *core.PackedTransaction) bool {
-	log15.Info("adding tx to mempool", "tx", tx)
 	th.mu.Lock()
 	defer th.mu.Unlock()
 
-	unpacked, err := tx.GetUnpackedTransaction()
+	err := tx.UnpackTransaction()
 
 	if err != nil {
+		log.Error("failed to unpack transaction", "error", err)
 		return false
 	}
 
 	// Don't add duplicates
-	if th.heap.Has(unpacked.ID()) {
+	if th.heap.Has(tx.UnpackedTrx.ID()) {
 		return false
 	}
 
 	oldLen := th.heap.Len()
 
 	heap.Push(th.heap, &txEntry{
-		id:      unpacked.ID(),
+		id:      tx.UnpackedTrx.ID(),
 		created: core.Now(),
 		tx:      tx,
 		index:   oldLen,
