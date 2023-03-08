@@ -6,6 +6,7 @@ import (
 	"math/big"
 )
 
+//go:generate msgp
 type Uint256 struct {
 	Low  Uint128
 	High Uint128

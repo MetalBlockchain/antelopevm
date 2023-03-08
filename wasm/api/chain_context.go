@@ -51,8 +51,21 @@ type ApplyContext interface {
 	ExecuteInline(action core.Action) error
 }
 
-type MultiIndex interface {
-	StoreIdx64(scope core.ScopeName, tableName core.TableName, payer core.AccountName, primaryKey uint64, secondaryKey uint64) (int, error)
+type MultiIndex[S any] interface {
+	Store(scope core.ScopeName, tableName core.TableName, payer core.AccountName, primaryKey uint64, secondaryKey S) (int, error)
+	Remove(iterator int) error
+	Update(iterator int, payer core.AccountName, secondaryKey S) error
+	FindSecondary(code core.AccountName, scope core.ScopeName, tableName core.TableName, secondaryKey *S, primaryKey *uint64) int
+	LowerboundSecondary(code core.AccountName, scope core.ScopeName, tableName core.TableName, secondaryKey *S, primaryKey *uint64) int
+	UpperboundSecondary(code core.AccountName, scope core.ScopeName, tableName core.TableName, secondaryKey *S, primaryKey *uint64) int
+	EndSecondary(code core.AccountName, scope core.ScopeName, tableName core.TableName) int
+	NextSecondary(iterator int, primaryKey *uint64) (int, error)
+	PreviousSecondary(iterator int, primaryKey *uint64) (int, error)
+	FindPrimary(code core.AccountName, scope core.ScopeName, tableName core.TableName, secondaryKey *S, primaryKey uint64) int
+	LowerboundPrimary(code core.AccountName, scope core.ScopeName, tableName core.TableName, primaryKey uint64) int
+	UpperboundPrimary(code core.AccountName, scope core.ScopeName, tableName core.TableName, primaryKey uint64) int
+	NextPrimary(iterator int, primaryKey *uint64) (int, error)
+	PreviousPrimary(iterator int, primaryKey *uint64) (int, error)
 }
 
 func eosAssert(condition bool, msg string) {

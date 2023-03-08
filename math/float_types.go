@@ -18,6 +18,7 @@ type Float16 uint16
 type Float32 uint32
 type Float64 uint64
 
+//go:generate msgp
 type Float128 struct {
 	Low  uint64
 	High uint64

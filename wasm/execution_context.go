@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/MetalBlockchain/antelopevm/math"
 	wasmApi "github.com/MetalBlockchain/antelopevm/wasm/api"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
@@ -20,16 +21,33 @@ type ExecutionContext struct {
 	controller           wasmApi.Controller
 	applyContext         wasmApi.ApplyContext
 	authorizationManager wasmApi.AuthorizationManager
-	multiIndex           wasmApi.MultiIndex
+	idx64                wasmApi.MultiIndex[uint64]
+	idx128               wasmApi.MultiIndex[math.Uint128]
+	idx256               wasmApi.MultiIndex[math.Uint256]
+	idxDouble            wasmApi.MultiIndex[float64]
+	idxLongDouble        wasmApi.MultiIndex[math.Float128]
 }
 
-func NewWasmExecutionContext(context context.Context, controller wasmApi.Controller, applyContext wasmApi.ApplyContext, authorizationManager wasmApi.AuthorizationManager, multiIndex wasmApi.MultiIndex) *ExecutionContext {
+func NewWasmExecutionContext(context context.Context,
+	controller wasmApi.Controller,
+	applyContext wasmApi.ApplyContext,
+	authorizationManager wasmApi.AuthorizationManager,
+	idx64 wasmApi.MultiIndex[uint64],
+	idx128 wasmApi.MultiIndex[math.Uint128],
+	idx256 wasmApi.MultiIndex[math.Uint256],
+	idxDouble wasmApi.MultiIndex[float64],
+	idxLongDouble wasmApi.MultiIndex[math.Float128],
+) *ExecutionContext {
 	return &ExecutionContext{
 		context:              context,
 		controller:           controller,
 		applyContext:         applyContext,
 		authorizationManager: authorizationManager,
-		multiIndex:           multiIndex,
+		idx64:                idx64,
+		idx128:               idx128,
+		idx256:               idx256,
+		idxDouble:            idxDouble,
+		idxLongDouble:        idxLongDouble,
 	}
 }
 
@@ -137,8 +155,24 @@ func (c *ExecutionContext) GetAuthorizationManager() wasmApi.AuthorizationManage
 	return c.authorizationManager
 }
 
-func (c *ExecutionContext) GetMultiIndex() wasmApi.MultiIndex {
-	return c.multiIndex
+func (c *ExecutionContext) GetIdx64() wasmApi.MultiIndex[uint64] {
+	return c.idx64
+}
+
+func (c *ExecutionContext) GetIdx128() wasmApi.MultiIndex[math.Uint128] {
+	return c.idx128
+}
+
+func (c *ExecutionContext) GetIdx256() wasmApi.MultiIndex[math.Uint256] {
+	return c.idx256
+}
+
+func (c *ExecutionContext) GetIdxDouble() wasmApi.MultiIndex[float64] {
+	return c.idxDouble
+}
+
+func (c *ExecutionContext) GetIdxLongDouble() wasmApi.MultiIndex[math.Float128] {
+	return c.idxLongDouble
 }
 
 // Shutdown kills the running WASM context
