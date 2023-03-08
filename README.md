@@ -215,8 +215,8 @@ Antelope VM relies on BadgerDB as its key-value store having access to the entir
 
 | Name                      | Status  |
 | ------------------------- |:-------:|
-| send_inline               | Missing |
-| send_context_free_inline  | Missing |
+| send_inline               | :white_check_mark: |
+| send_context_free_inline  | :white_check_mark: |
 | send_deferred             | Missing |
 | cancel_deferred           | Missing |
 
