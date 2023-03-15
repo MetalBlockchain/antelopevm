@@ -267,4 +267,4 @@ Antelope VM relies on BadgerDB as its key-value store having access to the entir
 | __letf2                   | :white_check_mark: |
 | __lttf2                   | :white_check_mark: |
 | __cmptf2                  | :white_check_mark: |
-| __unordtf2                | Missing |
+| __unordtf2                | :white_check_mark: |
