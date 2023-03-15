@@ -9,6 +9,7 @@ import (
 	"github.com/btcsuite/btcd/btcutil/base58"
 )
 
+//go:generate msgp
 type innerSignature interface {
 	verify(content []byte, hash []byte, pubKey PublicKey) bool
 	publicKey(content []byte, hash []byte) (out PublicKey, err error)

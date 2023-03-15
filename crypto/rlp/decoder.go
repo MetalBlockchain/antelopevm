@@ -152,7 +152,6 @@ func (d *Decoder) Decode(v interface{}) (err error) {
 			return err
 		}
 		rv.SetString(s)
-		//rlplog.Info("decode string: %s", s)
 		return err
 	case reflect.Bool:
 		var r bool
@@ -230,12 +229,25 @@ func (d *Decoder) Decode(v interface{}) (err error) {
 		return
 
 	case reflect.Slice:
+		// If the slice is a byte array just read it all at once instead of iterating
+		switch t.Elem().Kind() {
+		case reflect.Uint8:
+			if l, readErr := d.ReadByteArray(); readErr != nil {
+				return
+			} else {
+				slice := make([]uint8, len(l))
+				copy(slice, l)
+				rv.Set(reflect.ValueOf(slice))
+				return
+			}
+		default:
+			break
+		}
+
 		var l uint64
 		if l, err = d.ReadUvarint64(); err != nil {
-			fmt.Println("read varUint64: ", err)
 			return
 		}
-		//rlplog.Warn("decode slice: length is %d, type: %s", l, rv.String())
 
 		rv.Set(reflect.MakeSlice(t, int(l), int(l)))
 		for i := 0; i < int(l); i++ {
@@ -244,6 +256,7 @@ func (d *Decoder) Decode(v interface{}) (err error) {
 			}
 		}
 
+		return
 	case reflect.Map:
 		var l uint64
 		if l, err = d.ReadUvarint64(); err != nil {
@@ -264,12 +277,14 @@ func (d *Decoder) Decode(v interface{}) (err error) {
 			rv.SetMapIndex(kv, vv)
 		}
 
+		return
 	case reflect.Struct:
 		err = d.decodeStruct(v, t, rv)
 		if err != nil {
 			return
 		}
 
+		return
 	default:
 		return errors.New("decode, unsupported type " + t.String())
 	}

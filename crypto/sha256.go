@@ -10,6 +10,7 @@ import (
 	"github.com/MetalBlockchain/antelopevm/crypto/rlp"
 )
 
+//go:generate msgp
 type Sha256 struct {
 	Hash [4]uint64 `serialize:"true" eos:"array"`
 }
@@ -109,6 +110,14 @@ func (h Sha256) String() string {
 
 func (h Sha256) Bytes() []byte {
 	result := make([]byte, 32)
+	for i := range h.Hash {
+		binary.LittleEndian.PutUint64(result[i*8:(i+1)*8], h.Hash[i])
+	}
+	return result
+}
+
+func (h Sha256) FixedBytes() [32]byte {
+	var result [32]byte
 	for i := range h.Hash {
 		binary.LittleEndian.PutUint64(result[i*8:(i+1)*8], h.Hash[i])
 	}

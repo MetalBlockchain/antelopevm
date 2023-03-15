@@ -120,6 +120,18 @@ func (e *Encoder) Encode(v interface{}) (err error) {
 		}
 	case reflect.Slice:
 		l := rv.Len()
+
+		switch t.Elem().Kind() {
+		case reflect.Uint8:
+			if err := e.writeByteArray(rv.Bytes()); err != nil {
+				return err
+			}
+
+			return
+		default:
+			break
+		}
+
 		if l > MAX_NUM_ARRAY_ELEMENT {
 			return errors.New("the length of slice is too big")
 		}

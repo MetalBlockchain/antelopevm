@@ -1,5 +1,6 @@
 package ecc
 
+//go:generate msgp
 type CurveID uint8
 
 const (

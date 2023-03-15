@@ -9,6 +9,7 @@ import (
 
 	"github.com/MetalBlockchain/antelopevm/crypto/btcsuite/btcd/btcec"
 	"github.com/MetalBlockchain/antelopevm/crypto/btcsuite/btcutil/base58"
+	"github.com/hashicorp/go-set"
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -17,16 +18,33 @@ const PublicKeyK1Prefix = "PUB_K1_"
 const PublicKeyR1Prefix = "PUB_R1_"
 const PublicKeyPrefixCompat = "EOS"
 
+type PublicKeySet = *set.HashSet[PublicKey, string]
+
+func NewPublicKeySet(capacity int) PublicKeySet {
+	return set.NewHashSet[PublicKey, string](capacity)
+}
+
+func NewPublicKeySetFromArray(keys []PublicKey) PublicKeySet {
+	set := set.NewHashSet[PublicKey, string](len(keys))
+	set.InsertAll(keys)
+	return set
+}
+
 type innerPublicKey interface {
 	key(content []byte) (*btcec.PublicKey, error)
 	string(content []byte, curveID CurveID) string
 }
 
+//go:generate msgp
 type PublicKey struct {
 	Curve   CurveID  `serialize:"true" json:"key"`
 	Content [33]byte `serialize:"true" json:"key"`
 
 	inner innerPublicKey
+}
+
+func (p PublicKey) Hash() string {
+	return p.String()
 }
 
 func (p PublicKey) Pack() ([]byte, error) {

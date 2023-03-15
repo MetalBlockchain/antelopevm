@@ -14,24 +14,26 @@ import (
 var _ wasmApi.Context = &ExecutionContext{}
 
 type ExecutionContext struct {
-	context              context.Context
-	cancelFunc           context.CancelFunc
-	engine               wazero.Runtime
-	module               api.Module
-	controller           wasmApi.Controller
-	applyContext         wasmApi.ApplyContext
-	authorizationManager wasmApi.AuthorizationManager
-	idx64                wasmApi.MultiIndex[uint64]
-	idx128               wasmApi.MultiIndex[math.Uint128]
-	idx256               wasmApi.MultiIndex[math.Uint256]
-	idxDouble            wasmApi.MultiIndex[float64]
-	idxLongDouble        wasmApi.MultiIndex[math.Float128]
+	context               context.Context
+	cancelFunc            context.CancelFunc
+	engine                wazero.Runtime
+	module                api.Module
+	controller            wasmApi.Controller
+	applyContext          wasmApi.ApplyContext
+	authorizationManager  wasmApi.AuthorizationManager
+	resourceLimitsManager wasmApi.ResourceLimitsManager
+	idx64                 wasmApi.MultiIndex[uint64]
+	idx128                wasmApi.MultiIndex[math.Uint128]
+	idx256                wasmApi.MultiIndex[math.Uint256]
+	idxDouble             wasmApi.MultiIndex[float64]
+	idxLongDouble         wasmApi.MultiIndex[math.Float128]
 }
 
 func NewWasmExecutionContext(context context.Context,
 	controller wasmApi.Controller,
 	applyContext wasmApi.ApplyContext,
 	authorizationManager wasmApi.AuthorizationManager,
+	resourceLimitsManager wasmApi.ResourceLimitsManager,
 	idx64 wasmApi.MultiIndex[uint64],
 	idx128 wasmApi.MultiIndex[math.Uint128],
 	idx256 wasmApi.MultiIndex[math.Uint256],
@@ -39,15 +41,16 @@ func NewWasmExecutionContext(context context.Context,
 	idxLongDouble wasmApi.MultiIndex[math.Float128],
 ) *ExecutionContext {
 	return &ExecutionContext{
-		context:              context,
-		controller:           controller,
-		applyContext:         applyContext,
-		authorizationManager: authorizationManager,
-		idx64:                idx64,
-		idx128:               idx128,
-		idx256:               idx256,
-		idxDouble:            idxDouble,
-		idxLongDouble:        idxLongDouble,
+		context:               context,
+		controller:            controller,
+		applyContext:          applyContext,
+		authorizationManager:  authorizationManager,
+		resourceLimitsManager: resourceLimitsManager,
+		idx64:                 idx64,
+		idx128:                idx128,
+		idx256:                idx256,
+		idxDouble:             idxDouble,
+		idxLongDouble:         idxLongDouble,
 	}
 }
 
@@ -63,7 +66,7 @@ func (c *ExecutionContext) Initialize() error {
 		ExportFunctions(wasmApi.GetMemoryFunctions(c)).
 		ExportFunctions(wasmApi.GetConsoleFunctions(c)).
 		ExportFunctions(wasmApi.GetContextFreeFunctions(c)).
-		ExportFunctions(GetMathFunctions(c)).
+		ExportFunctions(wasmApi.GetCompilerBuiltinFunctions(c)).
 		ExportFunctions(GetSystemFunctions(c)).
 		ExportFunctions(wasmApi.GetDatabaseFunctions(c)).
 		ExportFunctions(wasmApi.GetCryptoFunctions(c)).
@@ -71,23 +74,6 @@ func (c *ExecutionContext) Initialize() error {
 		ExportFunctions(wasmApi.GetPrivilegedFunctions(c)).
 		ExportFunctions(wasmApi.GetProducerFunctions(c)).
 		ExportFunctions(wasmApi.GetTransactionFunctions(c)).
-		ExportFunction("__extendsftf2", Extendsftf2(c)).
-		ExportFunction("__floatsitf", Floatsitf(c)).
-		ExportFunction("__multf3", Multf3(c)).
-		ExportFunction("__floatunsitf", Floatunsitf(c)).
-		ExportFunction("__divtf3", Divtf3(c)).
-		ExportFunction("__addtf3", Addtf3(c)).
-		ExportFunction("__extenddftf2", Extenddftf2(c)).
-		ExportFunction("__eqtf2", Eqtf2(c)).
-		ExportFunction("__letf2", Letf2(c)).
-		ExportFunction("__netf2", Netf2(c)).
-		ExportFunction("__subtf3", Subtf3(c)).
-		ExportFunction("__trunctfdf2", Trunctfdf2(c)).
-		ExportFunction("__getf2", Getf2(c)).
-		ExportFunction("__trunctfsf2", Trunctfsf2(c)).
-		ExportFunction("__unordtf2", Unordtf2(c)).
-		ExportFunction("__fixunstfsi", Fixunstfsi(c)).
-		ExportFunction("__fixtfsi", Fixtfsi(c)).
 		Instantiate(c.context, c.engine); err != nil {
 		return err
 	}
@@ -153,6 +139,10 @@ func (c *ExecutionContext) GetApplyContext() wasmApi.ApplyContext {
 
 func (c *ExecutionContext) GetAuthorizationManager() wasmApi.AuthorizationManager {
 	return c.authorizationManager
+}
+
+func (c *ExecutionContext) GetResourceLimitsManager() wasmApi.ResourceLimitsManager {
+	return c.resourceLimitsManager
 }
 
 func (c *ExecutionContext) GetIdx64() wasmApi.MultiIndex[uint64] {
