@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -31,5 +32,5 @@ func main() {
 
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat())))
 
-	rpcchainvm.Serve(&vm.VM{})
+	rpcchainvm.Serve(context.Background(), &vm.VM{})
 }
