@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/MetalBlockchain/antelopevm/core"
+	"github.com/MetalBlockchain/antelopevm/core/name"
 	"github.com/MetalBlockchain/antelopevm/crypto/rlp"
 )
 
@@ -38,7 +39,7 @@ func NewABI(data []byte) (*ContractAbi, error) {
 	return abi, nil
 }
 
-func (a *ContractAbi) ActionForName(name core.ActionName) *ActionDef {
+func (a *ContractAbi) ActionForName(name name.ActionName) *ActionDef {
 	for _, a := range a.Actions {
 		if a.Name == name {
 			return &a
@@ -58,7 +59,7 @@ func (a *ContractAbi) StructForName(name string) *StructDef {
 	return nil
 }
 
-func (a *ContractAbi) TableForName(name core.TableName) *TableDef {
+func (a *ContractAbi) TableForName(name name.TableName) *TableDef {
 	for _, s := range a.Tables {
 		if s.Name == name {
 			return &s
@@ -95,13 +96,13 @@ type FieldDef struct {
 }
 
 type ActionDef struct {
-	Name              core.ActionName `json:"name"`
+	Name              name.ActionName `json:"name"`
 	Type              string          `json:"type"`
 	RicardianContract string          `json:"ricardian_contract"`
 }
 
 type TableDef struct {
-	Name      core.TableName `json:"name"`
+	Name      name.TableName `json:"name"`
 	IndexType string         `json:"index_type"`
 	KeyNames  []string       `json:"key_names,omitempty"`
 	KeyTypes  []string       `json:"key_types,omitempty"`

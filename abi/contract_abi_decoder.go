@@ -8,13 +8,14 @@ import (
 	"time"
 
 	"github.com/MetalBlockchain/antelopevm/core"
+	"github.com/MetalBlockchain/antelopevm/core/name"
 	"github.com/MetalBlockchain/antelopevm/crypto"
 	"github.com/MetalBlockchain/antelopevm/crypto/ecc"
 	"github.com/MetalBlockchain/antelopevm/crypto/rlp"
 	"github.com/MetalBlockchain/antelopevm/math"
 )
 
-func (a *ContractAbi) DecodeAction(actionName core.ActionName, data []byte) ([]byte, error) {
+func (a *ContractAbi) DecodeAction(actionName name.ActionName, data []byte) ([]byte, error) {
 	binaryDecoder := rlp.NewDecoder(data)
 	action := a.ActionForName(actionName)
 
@@ -205,7 +206,7 @@ func (a *ContractAbi) read(binaryDecoder *rlp.Decoder, fieldName string, fieldTy
 	case "name":
 		var val uint64
 		val, err = binaryDecoder.ReadName() //uint64
-		value = core.NameToString(val)
+		value = name.NameToString(val)
 	case "bytes":
 		value, err = binaryDecoder.ReadByteArray()
 		if err == nil {
