@@ -8,7 +8,10 @@ import (
 	"github.com/MetalBlockchain/antelopevm/core/name"
 	"github.com/MetalBlockchain/antelopevm/core/resource"
 	"github.com/MetalBlockchain/antelopevm/state"
+	wasmApi "github.com/MetalBlockchain/antelopevm/wasm/api"
 )
+
+var _ wasmApi.ResourceLimitsManager = &ResourceLimitsManager{}
 
 type ResourceLimitsManager struct {
 	session *state.Session
@@ -31,13 +34,13 @@ func (rl *ResourceLimitsManager) InitializeAccount(account name.AccountName) err
 		CpuWeight: -1,
 		RamBytes:  -1,
 	}); err != nil {
-		return err
+		return fmt.Errorf("could not create resource limits: %v", err)
 	}
 
 	if err := rl.session.CreateResourceUsage(&resource.ResourceUsage{
 		Owner: account,
 	}); err != nil {
-		return err
+		return fmt.Errorf("could not create resource usage: %v", err)
 	}
 
 	return nil
@@ -51,7 +54,7 @@ func (rl *ResourceLimitsManager) AddPendingRamUsage(account name.AccountName, ra
 	usage, err := rl.session.FindResourceUsageByOwner(account)
 
 	if err != nil {
-		return err
+		return fmt.Errorf("could not find resource usage object: %v", err)
 	}
 
 	if ramDelta > 0 && math.MaxUint64-usage.RamUsage < uint64(ramDelta) {
@@ -67,21 +70,21 @@ func (rl *ResourceLimitsManager) AddPendingRamUsage(account name.AccountName, ra
 }
 
 func (rl *ResourceLimitsManager) VerifyAccountRamUsage(account name.AccountName) error {
-	var ramBytes, netWeight, cpuWeight *int64
+	var ramBytes, netWeight, cpuWeight int64
 
-	if err := rl.GetAccountLimits(account, ramBytes, netWeight, cpuWeight); err != nil {
-		return err
+	if err := rl.GetAccountLimits(account, &ramBytes, &netWeight, &cpuWeight); err != nil {
+		return fmt.Errorf("could not find account limits: %v", err)
 	}
 
 	usage, err := rl.session.FindResourceUsageByOwner(account)
 
 	if err != nil {
-		return err
+		return fmt.Errorf("could not find resource usage object: %v", err)
 	}
 
-	if *ramBytes >= 0 {
-		if usage.RamUsage > uint64(*ramBytes) {
-			return fmt.Errorf("account %s has insufficient ram; needs %v bytes has %v bytes", account, usage.RamUsage, *ramBytes)
+	if ramBytes >= 0 {
+		if usage.RamUsage > uint64(ramBytes) {
+			return fmt.Errorf("account %s has insufficient ram; needs %v bytes has %v bytes", account, usage.RamUsage, ramBytes)
 		}
 	}
 
@@ -96,10 +99,10 @@ func (rl *ResourceLimitsManager) GetAccountLimits(account name.AccountName, ramB
 		*netWeight = pendingBuo.NetWeight
 		*cpuWeight = pendingBuo.CpuWeight
 	} else {
-		buo, err := rl.session.FindResourceLimitsByOwner(true, account)
+		buo, err := rl.session.FindResourceLimitsByOwner(false, account)
 
 		if err != nil {
-			return err
+			return fmt.Errorf("could not find account limits: %v", err)
 		}
 
 		*ramBytes = buo.RamBytes
@@ -108,4 +111,46 @@ func (rl *ResourceLimitsManager) GetAccountLimits(account name.AccountName, ramB
 	}
 
 	return nil
+}
+
+func (rl *ResourceLimitsManager) SetAccountLimits(account name.AccountName, ramBytes int64, netWeight int64, cpuWeight int64) (bool, error) {
+	pendingLimits, _ := rl.session.FindResourceLimitsByOwner(true, account)
+
+	if pendingLimits == nil {
+		limits, err := rl.session.FindResourceLimitsByOwner(false, account)
+
+		if err != nil {
+			return false, err
+		}
+
+		pendingLimits = &resource.ResourceLimits{
+			Owner:     limits.Owner,
+			RamBytes:  limits.RamBytes,
+			NetWeight: limits.NetWeight,
+			CpuWeight: limits.CpuWeight,
+			Pending:   true,
+		}
+
+		if err := rl.session.CreateResourceLimits(pendingLimits); err != nil {
+			return false, err
+		}
+	}
+
+	decreasedLimit := false
+
+	if ramBytes >= 0 {
+		if pendingLimits.RamBytes < 0 || ramBytes < pendingLimits.RamBytes {
+			decreasedLimit = true
+		}
+	}
+
+	if err := rl.session.ModifyResourceLimits(pendingLimits, func() {
+		pendingLimits.RamBytes = ramBytes
+		pendingLimits.NetWeight = netWeight
+		pendingLimits.CpuWeight = cpuWeight
+	}); err != nil {
+		return false, err
+	}
+
+	return decreasedLimit, nil
 }
