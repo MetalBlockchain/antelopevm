@@ -1,17 +1,21 @@
 package core
 
 import (
+	"bytes"
+	"compress/zlib"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"io/ioutil"
 	"math"
 
+	"github.com/MetalBlockchain/antelopevm/core/name"
 	"github.com/MetalBlockchain/antelopevm/crypto"
 	"github.com/MetalBlockchain/antelopevm/crypto/ecc"
 	"github.com/MetalBlockchain/antelopevm/crypto/rlp"
 	"github.com/inconshreveable/log15"
 )
 
+//go:generate msgp
 type TransactionIdType = crypto.Sha256
 
 type Extension struct {
@@ -93,42 +97,47 @@ func (t *Transaction) SigDigest(chainID *ChainIdType, cfd []HexBytes) *DigestTyp
 	return crypto.NewSha256Byte(hashed)
 }
 
-func (t *Transaction) GetSignatureKeys(signatures []ecc.Signature, chainID *ChainIdType, cfd []HexBytes, allowDuplicateKeys bool, useCache bool) ([]ecc.PublicKey, error) {
-	digest := t.SigDigest(chainID, cfd)
-	recovered := make(map[string]ecc.PublicKey)
+func (t *Transaction) GetSignatureKeys(signatures []ecc.Signature, chainId *ChainIdType, deadline TimePoint, cfd []HexBytes, allowDuplicateKeys bool) (ecc.PublicKeySet, TimePoint, error) {
+	start := Now()
+	set := ecc.NewPublicKeySet(len(signatures))
+	digest := t.SigDigest(chainId, cfd)
 
-	for _, sig := range signatures {
-		recov, _ := sig.PublicKey(digest.Bytes())
+	for i := 0; i < len(signatures); i++ {
+		now := Now()
 
-		if _, found := recovered[recov.String()]; found {
-			if !allowDuplicateKeys {
-				return nil, errors.New("transaction includes more than one signature signed using the same key associated with public key")
-			}
+		if now >= deadline {
+			return nil, Now() - start, fmt.Errorf("transaction signature verification executed for too long %sus", now-start)
 		}
 
-		recovered[recov.String()] = recov
+		recov, err := signatures[i].PublicKey(digest.Bytes())
+
+		if err != nil {
+			return nil, Now() - start, err
+		}
+
+		if set.Contains(recov) {
+			if !allowDuplicateKeys {
+				return nil, Now() - start, fmt.Errorf("transaction includes more than one signature signed using the same key associated with public key: %s", recov.String())
+			}
+		} else {
+			set.Insert(recov)
+		}
 	}
 
-	list := make([]ecc.PublicKey, len(recovered))
-
-	for _, value := range recovered {
-		list = append(list, value)
-	}
-
-	return list, nil
+	return set, Now() - start, nil
 }
 
 func (t *Transaction) TotalActions() uint32 {
 	return uint32(len(t.ContextFreeActions) + len(t.Actions))
 }
 
-func (tx *Transaction) FirstAuthorizor() AccountName {
+func (tx *Transaction) FirstAuthorizor() name.AccountName {
 	for _, a := range tx.Actions {
 		for _, auth := range a.Authorization {
 			return auth.Actor
 		}
 	}
-	return AccountName(0)
+	return name.AccountName(0)
 }
 
 type SignedTransaction struct {
@@ -157,8 +166,8 @@ func (s *SignedTransaction) Sign(key *ecc.PrivateKey, chainID *ChainIdType) ecc.
 	return signature
 }
 
-func (s *SignedTransaction) GetSignatureKeys(chainID *ChainIdType, allowDeplicateKeys bool, useCache bool) ([]ecc.PublicKey, error) {
-	return s.Transaction.GetSignatureKeys(s.Signatures, chainID, s.ContextFreeData, allowDeplicateKeys, useCache)
+func (s *SignedTransaction) GetSignatureKeys(chainId *ChainIdType, deadline TimePoint, allowDeplicateKeys bool) (ecc.PublicKeySet, TimePoint, error) {
+	return s.Transaction.GetSignatureKeys(s.Signatures, chainId, deadline, s.ContextFreeData, allowDeplicateKeys)
 }
 
 type TransactionStatus uint8
@@ -258,28 +267,23 @@ func NewPackedTransactionFromSignedTransaction(signedTrx SignedTransaction, comp
 }
 
 func (p *PackedTransaction) GetSignedTransaction() (*SignedTransaction, error) {
-	if p.Compression == CompressionNone {
-		unpackContextFreeData, err := unpackContextFreeData(&p.PackedContextFreeData)
+	err := p.UnpackTransaction()
 
-		if err != nil {
-			log15.Error("failed to get unpackContextFreeData", "error", err)
-			return nil, err
-		}
-
-		unpackedTransaction, err := p.GetUnpackedTransaction()
-
-		if err != nil {
-			log15.Error("failed to get unpackedTransaction", "error", err)
-			return nil, err
-		}
-
-		return NewSignedTransaction(unpackedTransaction, p.Signatures, unpackContextFreeData), nil
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, fmt.Errorf("unknown compression")
+	contextFreeData, err := p.GetContextFreeData()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return NewSignedTransaction(p.UnpackedTrx, p.Signatures, contextFreeData), nil
 }
 
 func (p *PackedTransaction) PackedDigest() crypto.Sha256 {
+	log15.Info("PackedDigest")
 	prunable := crypto.NewSha256()
 	result, _ := rlp.EncodeToBytes(p.Signatures)
 	prunable.Write(result)
@@ -298,30 +302,79 @@ func (p *PackedTransaction) PackedDigest() crypto.Sha256 {
 	return *crypto.NewSha256Byte(enc.Sum(nil))
 }
 
-func (p *PackedTransaction) GetUnpackedTransaction() (*Transaction, error) {
+func (p *PackedTransaction) GetTransaction() (*Transaction, error) {
+	if p.UnpackedTrx != nil {
+		return p.UnpackedTrx, nil
+	}
+
+	if err := p.UnpackTransaction(); err == nil {
+		return p.UnpackedTrx, nil
+	} else {
+		return nil, err
+	}
+}
+
+func (p *PackedTransaction) UnpackTransaction() error {
+	if p.UnpackedTrx != nil {
+		return nil
+	}
+
 	if p.Compression == CompressionNone {
-		return p.unpackTransaction()
+		unpacked, err := unpackTransaction(p.PackedTrx)
+
+		if err != nil {
+			return err
+		}
+
+		p.UnpackedTrx = unpacked
+		p.Id = unpacked.ID()
+
+		return nil
+	} else if p.Compression == CompressionZlib {
+		unpacked, err := zlibDecompressTransaction(&p.PackedTrx)
+
+		if err != nil {
+			return err
+		}
+
+		p.UnpackedTrx = unpacked
+		p.Id = unpacked.ID()
+
+		return nil
+	}
+
+	return fmt.Errorf("unknown compression")
+}
+
+func (p *PackedTransaction) GetContextFreeData() ([]HexBytes, error) {
+	log15.Info("GetContextFreeData")
+	if p.Compression == CompressionNone {
+		return unpackContextFreeData(&p.PackedContextFreeData)
+	} else if p.Compression == CompressionZlib {
+		return zlibDecompressContextFreeData(&p.PackedContextFreeData)
 	}
 
 	return nil, fmt.Errorf("unknown compression")
 }
 
-func (p *PackedTransaction) unpackTransaction() (*Transaction, error) {
-	transaction := &Transaction{}
+func (p *PackedTransaction) GetUnprunableSize() uint32 {
+	size := uint32(16) // FixedNetOverheadOfPackedTrx
+	size += uint32(len(p.PackedTrx))
+	return size
+}
 
-	if err := rlp.DecodeBytes(p.PackedTrx, transaction); err != nil {
-		return nil, err
-	}
-
-	p.UnpackedTrx = transaction
-	p.Id = transaction.ID()
-
-	return transaction, nil
+func (p *PackedTransaction) GetPrunableSize() uint32 {
+	size, _ := rlp.EncodeSize(p.Signatures)
+	size += len(p.PackedContextFreeData)
+	return uint32(size)
 }
 
 func (p *PackedTransaction) MarshalJSON() ([]byte, error) {
-	if p.UnpackedTrx == nil {
-		p.unpackTransaction()
+	log15.Info("MarshalJSON")
+	err := p.UnpackTransaction()
+
+	if err != nil {
+		return nil, err
 	}
 
 	return json.Marshal(&struct {
@@ -337,7 +390,7 @@ func (p *PackedTransaction) MarshalJSON() ([]byte, error) {
 		PackedContextFreeData: p.PackedContextFreeData,
 		PackedTrx:             p.PackedTrx,
 		UnpackedTrx:           p.UnpackedTrx,
-		Id:                    p.Id,
+		Id:                    p.UnpackedTrx.ID(),
 	})
 }
 
@@ -355,6 +408,16 @@ func unpackContextFreeData(data *HexBytes) ([]HexBytes, error) {
 	}
 
 	return out, nil
+}
+
+func unpackTransaction(data HexBytes) (*Transaction, error) {
+	tx := &Transaction{}
+
+	if err := rlp.DecodeBytes(data, tx); err != nil {
+		return nil, err
+	}
+
+	return tx, nil
 }
 
 func packTransaction(t *Transaction) ([]byte, error) { //Bytes
@@ -379,4 +442,49 @@ func packContextFreeData(cfd *[]HexBytes) ([]byte, error) {
 	}
 
 	return out, nil
+}
+
+func zlibDecompressTransaction(data *HexBytes) (*Transaction, error) {
+	packedTrx, err := zlibDecompress(data)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return unpackTransaction(packedTrx)
+}
+
+func zlibDecompressContextFreeData(data *HexBytes) ([]HexBytes, error) {
+	if len(*data) == 0 {
+		return []HexBytes{}, nil
+	}
+
+	packedData, err := zlibDecompress(data)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return unpackContextFreeData(&packedData)
+}
+
+func zlibDecompress(data *HexBytes) (HexBytes, error) {
+	in := bytes.NewReader(*data)
+	reader, err := zlib.NewReader(in)
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer reader.Close()
+	result, err := ioutil.ReadAll(reader)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+type TransactionMetaData struct {
 }

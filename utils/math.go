@@ -28,3 +28,10 @@ func AbsInt32(value int32) int32 {
 
 	return value
 }
+
+func Max(x, y uint64) uint64 {
+	if x > y {
+		return x
+	}
+	return y
+}

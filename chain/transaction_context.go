@@ -6,13 +6,14 @@ import (
 	"github.com/MetalBlockchain/antelopevm/config"
 	"github.com/MetalBlockchain/antelopevm/core"
 	"github.com/MetalBlockchain/antelopevm/core/name"
+	"github.com/MetalBlockchain/antelopevm/core/transaction"
 	"github.com/MetalBlockchain/antelopevm/crypto"
 	"github.com/MetalBlockchain/antelopevm/state"
 )
 
 type TransactionContext struct {
 	Control                      *Controller
-	Trx                          *core.PackedTransaction
+	PackedTrx                    *core.PackedTransaction
 	ID                           core.TransactionIdType
 	ApplyContextFree             bool
 	Trace                        *core.TransactionTrace
@@ -35,12 +36,13 @@ type TransactionContext struct {
 	deadline                  core.TimePoint
 	deadlineExceptionCode     int64
 	billingTimerExceptionCode int64
+	isInput                   bool
 }
 
 func NewTransactionContext(control *Controller, s *state.Session, t *core.PackedTransaction, trxId core.TransactionIdType, block *state.Block) *TransactionContext {
 	tc := TransactionContext{
 		Control:               control,
-		Trx:                   t,
+		PackedTrx:             t,
 		Session:               s,
 		AuthorizationManager:  *NewAuthorizationManager(control, s),
 		Deadline:              core.MaxTimePoint(),
@@ -67,7 +69,7 @@ func NewTransactionContext(control *Controller, s *state.Session, t *core.Packed
 }
 
 func (t *TransactionContext) InitForImplicitTransaction(initialNetUsage uint64) error {
-	transaction, err := t.Trx.GetTransaction()
+	transaction, err := t.PackedTrx.GetTransaction()
 
 	if err != nil {
 		return err
@@ -79,11 +81,50 @@ func (t *TransactionContext) InitForImplicitTransaction(initialNetUsage uint64) 
 
 	t.Published = t.Control.PendingBlockTime()
 
-	return t.Init()
+	return t.Init(initialNetUsage)
 }
 
-func (t *TransactionContext) Init() error {
-	transaction, err := t.Trx.GetTransaction()
+func (t *TransactionContext) InitForInputTransaction(packedTrxUnprunableSize uint64, packedTrxPrunableSize uint64) error {
+	transaction, err := t.PackedTrx.GetTransaction()
+
+	if err != nil {
+		return err
+	}
+
+	if len(transaction.TransactionExtensions) > 0 {
+		return fmt.Errorf("no transaction extensions supported yet for input transactions")
+	}
+
+	cfg, err := t.Session.FindGlobalPropertyObject(0)
+
+	if err != nil {
+		return err
+	}
+
+	discountedSizeForPrunedData := packedTrxPrunableSize
+
+	if cfg.Configuration.ContextFreeDiscountNetUsageDen > 0 && cfg.Configuration.ContextFreeDiscountNetUsageNum < cfg.Configuration.ContextFreeDiscountNetUsageDen {
+		discountedSizeForPrunedData *= uint64(cfg.Configuration.ContextFreeDiscountNetUsageNum)
+		discountedSizeForPrunedData = (discountedSizeForPrunedData + uint64(cfg.Configuration.ContextFreeDiscountNetUsageDen) - 1) / uint64(cfg.Configuration.ContextFreeDiscountNetUsageDen) // rounds up
+	}
+
+	initialNetUsage := uint64(cfg.Configuration.BasePerTransactionNetUsage) + packedTrxUnprunableSize + discountedSizeForPrunedData
+	t.Published = t.Control.PendingBlockTime()
+	t.isInput = true
+
+	if err := t.Init(initialNetUsage); err != nil {
+		return err
+	}
+
+	return t.RecordTransaction(t.PackedTrx.Id, transaction.Expiration)
+}
+
+func (t *TransactionContext) Init(initialNetUsage uint64) error {
+	if t.isInitialized {
+		return fmt.Errorf("cannot initialize twice")
+	}
+
+	transaction, err := t.PackedTrx.GetTransaction()
 
 	if err != nil {
 		return err
@@ -136,7 +177,7 @@ func (t *TransactionContext) Exec() error {
 		return fmt.Errorf("must first initialize")
 	}
 
-	transaction, err := t.Trx.GetTransaction()
+	transaction, err := t.PackedTrx.GetTransaction()
 
 	if err != nil {
 		return err
@@ -277,4 +318,11 @@ func (t *TransactionContext) UpdateBilledCpuTime(now core.TimePoint) {
 	} else {
 		t.BilledCpuTimeUs = int64(billed)
 	}
+}
+
+func (t *TransactionContext) RecordTransaction(id core.TransactionIdType, expire core.TimePointSec) error {
+	return t.Session.CreateTransactionObject(&transaction.TransactionObject{
+		TrxId:      id,
+		Expiration: expire,
+	})
 }

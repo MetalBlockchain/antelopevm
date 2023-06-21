@@ -1,10 +1,12 @@
 package core
 
 import (
+	"github.com/MetalBlockchain/antelopevm/core/name"
 	"github.com/MetalBlockchain/antelopevm/crypto"
 	"github.com/MetalBlockchain/antelopevm/crypto/rlp"
 )
 
+//go:generate msgp
 type TransactionReceiptHeader struct {
 	Status        TransactionStatus `serialize:"true" json:"status"`
 	CpuUsageUs    uint32            `serialize:"true" json:"cpu_usage_us"`
@@ -37,43 +39,71 @@ func (t *TransactionReceipt) Digest() crypto.Sha256 {
 	return *crypto.NewSha256Byte(enc.Sum(nil))
 }
 
+var _ Entity = &TransactionTrace{}
+
 type TransactionTrace struct {
-	Id           TransactionIdType  `serialize:"true" json:"id"`
-	BlockNum     uint32             `serialize:"true" json:"block_num"`
+	ID           IdType             `serialize:"true" json:"-" eos:"-"`
+	Hash         TransactionIdType  `serialize:"true" json:"id"`
+	BlockNum     uint64             `serialize:"true" json:"block_num"`
 	BlockTime    TimePoint          `serialize:"true" json:"block_time"`
-	Receipt      TransactionReceipt `serialize:"true" json:"-"`
+	Receipt      TransactionReceipt `serialize:"true" json:"receipt"`
 	Elapsed      Microseconds       `serialize:"true" json:"elapsed"`
 	NetUsage     uint64             `serialize:"true" json:"-"`
-	Scheduled    bool               `serialize:"true" json:"-"`
-	ActionTraces []ActionTrace      `serialize:"true" json:"traces"`
-	Except       error              `json:"-"`
+	Scheduled    bool               `serialize:"true" json:"scheduled"`
+	ActionTraces []ActionTrace      `serialize:"true" json:"action_traces"`
+	Except       error              `msg:"-" json:"-"`
 	ErrorCode    uint64             `json:"-"`
 }
 
+func (a TransactionTrace) GetId() []byte {
+	return a.ID.ToBytes()
+}
+
+func (a TransactionTrace) GetIndexes() map[string]EntityIndex {
+	return map[string]EntityIndex{
+		"id": {
+			Fields: []string{"ID"},
+		},
+		"byHash": {
+			Fields: []string{"Hash"},
+		},
+	}
+}
+
+func (a TransactionTrace) GetObjectType() uint8 {
+	return TransactionType
+}
+
+type RamDelta struct {
+	Account name.AccountName `serialize:"true" json:"account"`
+	Delta   int64            `serialize:"true" json:"delta"`
+}
+
 type ActionTrace struct {
+	AccountRamDeltas     []RamDelta        `serialize:"true" json:"account_ram_deltas"`
 	ActionOrdinal        Vuint32           `serialize:"true" json:"action_ordinal"`
 	CreatorActionOrdinal Vuint32           `serialize:"true" json:"creator_action_ordinal"`
 	Receipt              ActionReceipt     `serialize:"true" json:"receipt"`
-	Receiver             ActionName        `serialize:"true" json:"receiver"`
+	Receiver             name.ActionName   `serialize:"true" json:"receiver"`
 	Action               Action            `serialize:"true" json:"act"`
 	ContextFree          bool              `serialize:"true" json:"context_free"`
 	Elapsed              uint64            `serialize:"true" json:"elapsed"`
 	Console              string            `serialize:"true" json:"-"`
 	TransactionId        TransactionIdType `serialize:"true" json:"trx_id"`
-	BlockNum             uint32            `serialize:"true" json:"block_num"`
+	BlockNum             uint64            `serialize:"true" json:"block_num"`
 	BlockTime            TimePoint         `serialize:"true" json:"block_time"`
-	Except               error             `json:"-"`
+	Except               error             `msg:"-" json:"-"`
 	ErrorCode            uint64            `serialize:"true" json:"-"`
 }
 
-func NewActionTrace(trace *TransactionTrace, action Action, receiver AccountName, contextFree bool, actionOrdinal Vuint32, creatorActionOrdinal Vuint32) *ActionTrace {
+func NewActionTrace(trace *TransactionTrace, action Action, receiver name.AccountName, contextFree bool, actionOrdinal Vuint32, creatorActionOrdinal Vuint32) *ActionTrace {
 	return &ActionTrace{
 		ActionOrdinal:        actionOrdinal,
 		CreatorActionOrdinal: creatorActionOrdinal,
 		Receiver:             receiver,
 		Action:               action,
 		ContextFree:          contextFree,
-		TransactionId:        trace.Id,
+		TransactionId:        trace.Hash,
 		BlockNum:             trace.BlockNum,
 		BlockTime:            trace.BlockTime,
 	}

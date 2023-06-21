@@ -1,0 +1,133 @@
+package state
+
+import (
+	"testing"
+
+	"github.com/MetalBlockchain/antelopevm/core"
+	"github.com/dgraph-io/badger/v3"
+	"github.com/stretchr/testify/assert"
+)
+
+func TestFindNextKeyValue(t *testing.T) {
+	db, err := badger.Open(badger.DefaultOptions(t.TempDir()))
+	assert.NoError(t, err)
+	state := NewState(nil, db)
+	session := state.CreateSession(true)
+	defer session.Discard()
+	table1 := &core.Table{
+		Code:  name.StringToName("eosio.token"),
+		Scope: name.StringToName("eosio"),
+		Table: name.StringToName("accounts"),
+		Payer: name.StringToName("eosio.token"),
+		Count: 0,
+	}
+	table2 := &core.Table{
+		Code:  name.StringToName("eosio.token"),
+		Scope: name.StringToName("eosio.token"),
+		Table: name.StringToName("accounts"),
+		Payer: name.StringToName("eosio.token"),
+		Count: 0,
+	}
+	err = session.CreateTable(table1)
+	assert.NoError(t, err)
+	err = session.CreateTable(table2)
+	assert.NoError(t, err)
+	kv1 := &core.KeyValue{
+		TableID:    table1.ID,
+		PrimaryKey: 1,
+		Payer:      name.StringToName("eosio.token"),
+		Value:      core.HexBytes{0},
+	}
+	kv2 := &core.KeyValue{
+		TableID:    table1.ID,
+		PrimaryKey: 2,
+		Payer:      name.StringToName("eosio.token"),
+		Value:      core.HexBytes{0},
+	}
+	kv3 := &core.KeyValue{
+		TableID:    table2.ID,
+		PrimaryKey: 1,
+		Payer:      name.StringToName("eosio.token"),
+		Value:      core.HexBytes{0},
+	}
+	err = session.CreateKeyValue(kv1)
+	assert.NoError(t, err)
+	err = session.CreateKeyValue(kv2)
+	assert.NoError(t, err)
+	err = session.CreateKeyValue(kv3)
+	assert.NoError(t, err)
+
+	nextKv, err := session.FindNextKeyValue(kv1)
+	assert.NoError(t, err)
+	assert.Equal(t, kv2.PrimaryKey, nextKv.PrimaryKey)
+}
+
+func TestFindPreviousKeyValue(t *testing.T) {
+	db, err := badger.Open(badger.DefaultOptions(t.TempDir()))
+	assert.NoError(t, err)
+	state := NewState(nil, db)
+	session := state.CreateSession(true)
+	defer session.Discard()
+	table1 := &core.Table{
+		Code:  name.StringToName("eosio.token"),
+		Scope: name.StringToName("eosio"),
+		Table: name.StringToName("accounts"),
+		Payer: name.StringToName("eosio.token"),
+		Count: 0,
+	}
+	table2 := &core.Table{
+		Code:  name.StringToName("eosio.token"),
+		Scope: name.StringToName("eosio.token"),
+		Table: name.StringToName("accounts"),
+		Payer: name.StringToName("eosio.token"),
+		Count: 0,
+	}
+	err = session.CreateTable(table1)
+	assert.NoError(t, err)
+	err = session.CreateTable(table2)
+	assert.NoError(t, err)
+	kv1 := &core.KeyValue{
+		TableID:    table1.ID,
+		PrimaryKey: 1,
+		Payer:      name.StringToName("eosio.token"),
+		Value:      core.HexBytes{0},
+	}
+	kv2 := &core.KeyValue{
+		TableID:    table1.ID,
+		PrimaryKey: 2,
+		Payer:      name.StringToName("eosio.token"),
+		Value:      core.HexBytes{0},
+	}
+	kv3 := &core.KeyValue{
+		TableID:    table2.ID,
+		PrimaryKey: 1,
+		Payer:      name.StringToName("eosio.token"),
+		Value:      core.HexBytes{0},
+	}
+	err = session.CreateKeyValue(kv1)
+	assert.NoError(t, err)
+	err = session.CreateKeyValue(kv2)
+	assert.NoError(t, err)
+	err = session.CreateKeyValue(kv3)
+	assert.NoError(t, err)
+
+	prevKv, err := session.FindPreviousKeyValue(kv2)
+	assert.NoError(t, err)
+	assert.Equal(t, kv1.PrimaryKey, prevKv.PrimaryKey)
+
+	lowerbound := session.LowerboundKeyValueByScopePrimary(kv1.TableID)
+	defer lowerbound.Close()
+	lowerbound.Seek()
+
+	lowerboundKv, err := lowerbound.Item()
+	assert.NoError(t, err)
+	assert.Equal(t, kv1.PrimaryKey, lowerboundKv.PrimaryKey)
+
+	upperbound := session.LowerboundKeyValueByScopePrimary(kv1.TableID)
+	defer upperbound.Close()
+	upperbound.Seek()
+
+	upperboundKv, err := upperbound.Item()
+	assert.NoError(t, err)
+	assert.Equal(t, kv1.PrimaryKey, upperboundKv.PrimaryKey)
+}

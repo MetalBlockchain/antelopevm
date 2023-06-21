@@ -1,4 +1,4 @@
-package core
+package name
 
 import (
 	"encoding/binary"
@@ -10,12 +10,8 @@ import (
 	"github.com/MetalBlockchain/antelopevm/crypto/rlp"
 )
 
+//go:generate msgp
 type Name uint64
-type AccountName = Name
-type PermissionName = Name
-type ActionName = Name
-type TableName = Name
-type ScopeName = Name
 
 func (n Name) String() string {
 	return NameToString(uint64(n))
@@ -25,10 +21,10 @@ func (n Name) IsEmpty() bool {
 	return n == 0
 }
 
-func (n Name) Pack() ([]byte, error) {
+func (n Name) Pack() []byte {
 	buf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(buf, uint64(n))
-	return buf, nil
+	return buf
 }
 
 func (n *Name) Unpack(in []byte) (rlp.Unpack, error) {
@@ -78,7 +74,7 @@ func StringToName(s string) Name {
 	var val uint64
 	sLen := uint32(len(s))
 	if sLen > 13 {
-		panic("Name is longer than 13 characters")
+		return Name(0)
 	}
 	for ; i <= 12; i++ {
 		var c uint64
@@ -100,20 +96,22 @@ func StringToName(s string) Name {
 }
 
 // S converts a uint64 to a base32 string. String representation of the name.
-func NameToString(in uint64) string {
+func NameToString(value uint64) string {
 	a := []byte{'.', '.', '.', '.', '.', '.', '.', '.', '.', '.', '.', '.', '.'}
 
-	tmp := in
-	i := uint32(0)
-	for ; i <= 12; i++ {
+	tmp := value
+	for i := 0; i <= 12; i++ {
 		bit := 0x1f
+
 		if i == 0 {
 			bit = 0x0f
 		}
+
 		c := base32Alphabet[tmp&uint64(bit)]
 		a[12-i] = c
 
 		shift := uint(5)
+
 		if i == 0 {
 			shift = 4
 		}
@@ -122,36 +120,6 @@ func NameToString(in uint64) string {
 	}
 
 	return strings.TrimRight(string(a), ".")
-}
-
-func NameSuffix(n uint64) uint64 {
-	remainingBitsAfterLastActualDot := uint32(0)
-	tmp := 0
-	for remainingBits := 59; remainingBits >= 4; remainingBits -= 5 { // int
-		//Note: remaining_bits must remain signed integer
-		//Get characters one-by-one in name in order from left to right (not including the 13th character)
-		c := (n >> uint(remainingBits)) & 0x1F
-		if c == 0 { // if this character is a dot
-			tmp = remainingBits
-		} else {
-			remainingBitsAfterLastActualDot = uint32(tmp)
-		}
-	}
-
-	thirteenthCharacter := n & 0x0F
-	if thirteenthCharacter != 0 { // if 13th character is not a dot
-		remainingBitsAfterLastActualDot = uint32(tmp)
-	}
-	if remainingBitsAfterLastActualDot == 0 { // there is no actual dot in the name other than potentially leading dots
-		return n
-	}
-	// At this point remaining_bits_after_last_actual_dot has to be within the range of 4 to 59 (and restricted to increments of 5).
-	// Mask for remaining bits corresponding to characters after last actual dot, except for 4 least significant bits (corresponds to 13th character).
-
-	mask := uint64((1 << remainingBitsAfterLastActualDot) - 16)
-	shift := uint32(64 - remainingBitsAfterLastActualDot)
-
-	return uint64(((n & mask) << shift) + (thirteenthCharacter << (shift - 1)))
 }
 
 // charToSymbol converts a base32 symbol into its binary representation, used by N()

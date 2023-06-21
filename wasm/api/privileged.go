@@ -1,8 +1,8 @@
 package api
 
 import (
-	"github.com/MetalBlockchain/antelopevm/core"
-	log "github.com/inconshreveable/log15"
+	"github.com/MetalBlockchain/antelopevm/core/name"
+	"github.com/MetalBlockchain/antelopevm/core/producer"
 )
 
 func GetPrivilegedFunctions(context Context) map[string]interface{} {
@@ -27,49 +27,69 @@ func GetPrivilegedFunctions(context Context) map[string]interface{} {
 	return functions
 }
 
-func isFeatureActive(context Context) func(core.Name) int32 {
-	return func(featureName core.Name) int32 {
-		log.Info("is_feature_active", "featureName", featureName)
+func isFeatureActive(context Context) func(name.Name) int32 {
+	return func(featureName name.Name) int32 {
+		checkPrivileged(context)
 
 		return 0
 	}
 }
 
-func activateFeature(context Context) func(core.Name) {
-	return func(featureName core.Name) {
-		log.Info("activate_feature", "featureName", featureName)
+func activateFeature(context Context) func(name.Name) {
+	return func(featureName name.Name) {
+		checkPrivileged(context)
 
-		panic("not supported")
+		panic("unsupported hardfork detected")
 	}
 }
 
 func preactivateFeature(context Context) func(uint32) {
 	return func(ptr uint32) {
-		log.Info("preactivate_feature", "ptr", ptr)
+		checkPrivileged(context)
 
 		panic("not supported")
 	}
 }
 
-func setResourceLimits(context Context) func(core.AccountName, int64, int64, int64) {
-	return func(account core.AccountName, ramBytes int64, netWeight int64, cpuWeight int64) {
-		log.Info("set_resource_limits", "account", account, "ramBytes", ramBytes, "netWeight", netWeight, "cpuWeight", cpuWeight)
+func setResourceLimits(context Context) func(name.AccountName, int64, int64, int64) {
+	return func(account name.AccountName, ramBytes int64, netWeight int64, cpuWeight int64) {
+		checkPrivileged(context)
 
-		panic("not supported")
+		eosAssert(ramBytes >= -1, "invalid value for ram resource limit expected [-1,INT64_MAX]")
+		eosAssert(netWeight >= -1, "invalid value for net resource limit expected [-1,INT64_MAX]")
+		eosAssert(cpuWeight >= -1, "invalid value for cpu resource limit expected [-1,INT64_MAX]")
+
+		decreasedLimit, err := context.GetResourceLimitsManager().SetAccountLimits(account, ramBytes, netWeight, cpuWeight)
+
+		if err != nil {
+			panic(err)
+		}
+
+		if decreasedLimit {
+			// TODO: context.trx_context.validate_ram_usage.insert( account );
+		}
 	}
 }
 
-func getResourceLimits(context Context) func(core.AccountName, uint32, uint32, uint32) {
-	return func(account core.AccountName, ramPtr uint32, netPtr uint32, cpuPtr uint32) {
-		log.Info("get_resource_limits", "account", account, "ramPtr", ramPtr, "netPtr", netPtr, "cpuPtr", cpuPtr)
+func getResourceLimits(context Context) func(name.AccountName, uint32, uint32, uint32) {
+	return func(account name.AccountName, ramBytesPtr uint32, netWeightPtr uint32, cpuWeightPtr uint32) {
+		checkPrivileged(context)
 
-		panic("not supported")
+		var ramBytes, netWeight, cpuWeight int64
+
+		if err := context.GetResourceLimitsManager().GetAccountLimits(account, &ramBytes, &netWeight, &cpuWeight); err != nil {
+			panic(err)
+		}
+
+		setUint64(context, ramBytesPtr, uint64(ramBytes))
+		setUint64(context, netWeightPtr, uint64(netWeight))
+		setUint64(context, cpuWeightPtr, uint64(cpuWeight))
 	}
 }
 
 func getWasmParametersPacked(context Context) func(uint32, uint32, uint32) uint32 {
 	return func(ptr uint32, length uint32, maxVersion uint32) uint32 {
-		log.Info("get_wasm_parameters_packed", "ptr", ptr, "length", length, "maxVersion", maxVersion)
+		checkPrivileged(context)
 
 		panic("not supported")
 	}
@@ -77,7 +97,7 @@ func getWasmParametersPacked(context Context) func(uint32, uint32, uint32) uint3
 
 func setWasmParametersPacked(context Context) func(uint32, uint32) {
 	return func(ptr uint32, length uint32) {
-		log.Info("set_wasm_parameters_packed", "ptr", ptr, "length", length)
+		checkPrivileged(context)
 
 		panic("not supported")
 	}
@@ -85,7 +105,7 @@ func setWasmParametersPacked(context Context) func(uint32, uint32) {
 
 func setProposedProducers(context Context) func(uint32, uint32) int64 {
 	return func(ptr uint32, length uint32) int64 {
-		log.Info("set_proposed_producers", "ptr", ptr, "length", length)
+		checkPrivileged(context)
 
 		panic("not supported")
 	}
@@ -93,7 +113,7 @@ func setProposedProducers(context Context) func(uint32, uint32) int64 {
 
 func setProposedProducersEx(context Context) func(uint64, uint32, uint32) int64 {
 	return func(format uint64, ptr uint32, length uint32) int64 {
-		log.Info("set_proposed_producers_ex", "format", format, "ptr", ptr, "length", length)
+		checkPrivileged(context)
 
 		panic("not supported")
 	}
@@ -101,7 +121,7 @@ func setProposedProducersEx(context Context) func(uint64, uint32, uint32) int64 
 
 func getBlockchainParametersPacked(context Context) func(uint32, uint32) uint32 {
 	return func(ptr uint32, length uint32) uint32 {
-		log.Info("get_blockchain_parameters_packed", "ptr", ptr, "length", length)
+		checkPrivileged(context)
 
 		panic("not supported")
 	}
@@ -109,7 +129,7 @@ func getBlockchainParametersPacked(context Context) func(uint32, uint32) uint32 
 
 func setBlockchainParametersPacked(context Context) func(uint32, uint32) {
 	return func(ptr uint32, length uint32) {
-		log.Info("set_blockchain_parameters_packed", "ptr", ptr, "length", length)
+		checkPrivileged(context)
 
 		panic("not supported")
 	}
@@ -117,7 +137,7 @@ func setBlockchainParametersPacked(context Context) func(uint32, uint32) {
 
 func getParametersPacked(context Context) func(uint32, uint32, uint32, uint32) uint32 {
 	return func(idsPtr uint32, idsLength uint32, parametersPtr uint32, parametersLength uint32) uint32 {
-		log.Info("get_parameters_packed", "idsPtr", idsPtr, "idsLength", idsLength)
+		checkPrivileged(context)
 
 		panic("not supported")
 	}
@@ -125,28 +145,46 @@ func getParametersPacked(context Context) func(uint32, uint32, uint32, uint32) u
 
 func setParametersPacked(context Context) func(uint32, uint32) {
 	return func(ptr uint32, length uint32) {
-		log.Info("set_parameters_packed", "ptr", ptr, "length", length)
+		checkPrivileged(context)
 
 		panic("not supported")
 	}
 }
 
-func isPrivileged(context Context) func(core.AccountName) int32 {
-	return func(account core.AccountName) int32 {
-		log.Info("is_privileged", "account", account)
+func isPrivileged(context Context) func(name.AccountName) int32 {
+	return func(account name.AccountName) int32 {
+		checkPrivileged(context)
 
-		panic("not supported")
+		privileged, err := context.GetApplyContext().IsPrivileged(account)
+
+		if err != nil {
+			panic(err)
+		}
+
+		if privileged {
+			return 1
+		}
+
+		return 0
 	}
 }
 
-func setPrivileged(context Context) func(core.AccountName, int32) {
-	return func(account core.AccountName, isPrivileged int32) {
-		log.Info("set_privileged", "account", account, "isPrivileged", isPrivileged)
+func setPrivileged(context Context) func(name.AccountName, int32) {
+	return func(account name.AccountName, isPrivileged int32) {
+		checkPrivileged(context)
 
-		panic("not supported")
+		if err := context.GetApplyContext().SetPrivileged(account, isPrivileged != 0); err != nil {
+			panic(err)
+		}
 	}
 }
 
-func setProposedProducersCommon(context Context, validateKeys bool) {
-	panic("not supported")
+func setProposedProducersCommon(context Context, producers []producer.ProducerKey, validateKeys bool) {
+	panic("not implemented")
+}
+
+func checkPrivileged(context Context) {
+	if !context.GetApplyContext().IsContextPrivileged() {
+		panic(context.GetApplyContext().GetReceiver().String() + " does not have permission to call this API")
+	}
 }

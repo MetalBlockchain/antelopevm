@@ -2,6 +2,8 @@ package api
 
 import (
 	"fmt"
+
+	"github.com/inconshreveable/log15"
 )
 
 func GetContextFreeSystemFunctions(context Context) map[string]interface{} {
@@ -36,7 +38,9 @@ func assert(context Context) func(uint32, uint32) {
 				size++
 			}
 
-			text := string(data[ptr : ptr+size])
+			log15.Info("f", "data", data, "size", size, "ptr", ptr)
+
+			text := string(data[:size])
 
 			panic(fmt.Sprintf("assertion failure with message: %s", text))
 		}

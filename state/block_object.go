@@ -6,51 +6,48 @@ import (
 	"time"
 
 	"github.com/MetalBlockchain/antelopevm/core"
+	"github.com/MetalBlockchain/antelopevm/core/name"
 	"github.com/MetalBlockchain/antelopevm/crypto"
-	"github.com/MetalBlockchain/metalgo/database"
-	"github.com/MetalBlockchain/metalgo/database/versiondb"
 	"github.com/MetalBlockchain/metalgo/ids"
 	"github.com/MetalBlockchain/metalgo/snow/choices"
 	"github.com/MetalBlockchain/metalgo/snow/consensus/snowman"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/inconshreveable/log15"
 )
 
 var (
 	_ snowman.Block = &Block{}
+	_ core.Entity   = &Block{}
 )
 
+//go:generate msgp
 type Block struct {
-	core.BlockHeader `serialize:"true"`
-	Transactions     []core.TransactionReceipt `serialize:"true"`
-	BlockExtensions  []core.Extension          `serialize:"true"`
-
-	status choices.Status
-	hash   [32]byte
-
-	vm         VM
-	onAcceptDB *versiondb.Database
+	Index           core.IdType               `serialize:"true"`
+	Hash            core.BlockHash            `serialize:"true"`
+	Header          core.BlockHeader          `serialize:"true"`
+	Transactions    []core.TransactionReceipt `serialize:"true"`
+	BlockExtensions []core.Extension          `serialize:"true"`
+	BlockStatus     core.BlockStatus          `serialize:"true"`
+	vm              VM
 }
 
-func NewBlock(vm VM, timestamp core.TimePoint, parentID ids.ID, height uint64) *Block {
+func NewBlock(vm VM, timestamp core.TimePoint, parent core.BlockHash, height uint64) *Block {
 	return &Block{
-		BlockHeader: core.BlockHeader{
-			Created:       timestamp,
-			Producer:      core.StringToName("eosio"),
-			Confirmed:     1,
-			PreviousBlock: parentID,
-			Index:         height,
+		Header: core.BlockHeader{
+			Created:           timestamp,
+			Producer:          name.StringToName("eosio"),
+			Confirmed:         1,
+			PreviousBlockHash: parent,
+			Index:             height,
 		},
-		Transactions: []core.TransactionReceipt{},
+		Transactions: make([]core.TransactionReceipt, 0),
 		vm:           vm,
-		status:       choices.Processing,
+		BlockStatus:  core.BlockStatusProcessing,
 	}
 }
 
-func (b *Block) Initialize(vm VM, status choices.Status) {
+func (b *Block) Initialize(vm VM) {
 	b.vm = vm
-	b.status = status
-
-	copy(b.hash[:], crypto.Hash256(*b).Bytes())
 }
 
 // Verify returns nil iff this block is valid.
@@ -58,24 +55,22 @@ func (b *Block) Initialize(vm VM, status choices.Status) {
 // b.parent.Timestamp < b.Timestamp <= [local time] + 1 hour
 func (b *Block) Verify(ctx context.Context) error {
 	log.Debug("verifying block", "block", b)
-	parentBlock, err := b.vm.GetStoredBlock(context.Background(), b.Parent())
 
-	if err != nil {
-		return err
-	}
-
-	parentDB, err := parentBlock.onAccept()
-
-	if err != nil {
-		return err
-	}
-
-	b.onAcceptDB = versiondb.New(parentDB)
+	session := b.vm.State().CreateSession(true)
+	defer session.Discard()
 
 	for _, trx := range b.Transactions {
-		if _, err := b.vm.ExecuteTransaction(&trx.Transaction, b.onAcceptDB); err != nil {
+		if trace, err := b.vm.ExecuteTransaction(&trx.Transaction, b, session); err != nil {
 			return fmt.Errorf("block contains transaction that failed")
+		} else {
+			if err := session.CreateTransaction(trace); err != nil {
+				return err
+			}
 		}
+	}
+
+	if err := session.Commit(); err != nil {
+		return err
 	}
 
 	return b.vm.Verified(b)
@@ -85,12 +80,6 @@ func (b *Block) Verify(ctx context.Context) error {
 // block's ID and saves this info to b.vm.DB
 func (b *Block) Accept(ctx context.Context) error {
 	log.Debug("accepting block", "block", b)
-	// Commit changes included in this block
-	if b.Index > 0 {
-		if err := b.onAcceptDB.Commit(); err != nil {
-			return err
-		}
-	}
 
 	return b.vm.Accepted(b)
 }
@@ -98,48 +87,77 @@ func (b *Block) Accept(ctx context.Context) error {
 // Reject sets this block's status to Rejected and saves the status in state
 // Recall that b.vm.DB.Commit() must be called to persist to the DB
 func (b *Block) Reject(ctx context.Context) error {
-	log.Warn("rejected block", "block", b)
 	return b.vm.Rejected(b)
 }
 
 func (b *Block) Bytes() []byte {
-	bytes, _ := Codec.Marshal(uint16(CodecVersion), b)
+	bytes, err := b.MarshalMsg(nil)
+
+	if err != nil {
+		log15.Error("failed to get bytes", "error", err)
+	}
 
 	return bytes
 }
 
 // ID returns the ID of this block
 func (b *Block) ID() ids.ID {
-	return ids.ID(b.hash)
+	return ids.ID(b.Hash)
 }
 
 // ParentID returns [b]'s parent's ID
-func (b *Block) Parent() ids.ID { return b.PreviousBlock }
+func (b *Block) Parent() ids.ID {
+	return ids.ID(b.Header.PreviousBlockHash)
+}
 
 // Height returns this block's height. The genesis block has height 1.
-func (b *Block) Height() uint64 { return b.Index }
+func (b *Block) Height() uint64 { return b.Header.Index }
 
 // Timestamp returns this block's time. The genesis block has time 0.
-func (b *Block) Timestamp() time.Time { return b.Created.ToTime() }
+func (b *Block) Timestamp() time.Time { return b.Header.Created.ToTime() }
 
 // Status returns the status of this block
-func (b *Block) Status() choices.Status { return b.status }
+func (b *Block) Status() choices.Status {
+	if b.BlockStatus == core.BlockStatusAccepted {
+		return choices.Accepted
+	} else if b.BlockStatus == core.BlockStatusRejected {
+		return choices.Rejected
+	}
+
+	return choices.Processing
+}
 
 // SetStatus sets the status of this block
-func (b *Block) SetStatus(status choices.Status) { b.status = status }
-
-func (b *Block) onAccept() (database.Database, error) {
-	if b.status == choices.Accepted || b.Index == 0 /* genesis */ {
-		return b.vm.State(), nil
+func (b *Block) SetStatus(status choices.Status) {
+	if status == choices.Accepted {
+		b.BlockStatus = core.BlockStatusAccepted
+	} else if status == choices.Rejected {
+		b.BlockStatus = core.BlockStatusRejected
+	} else {
+		b.BlockStatus = core.BlockStatusProcessing
 	}
-
-	if b.onAcceptDB != nil {
-		return b.onAcceptDB, nil
-	}
-
-	return nil, fmt.Errorf("block not verified")
 }
 
 func (b *Block) Finalize() {
-	copy(b.hash[:], crypto.Hash256(*b).Bytes())
+	digest := crypto.Hash256(b.Header)
+	b.Hash = core.BlockHash(digest.FixedBytes())
+}
+
+func (b Block) GetId() []byte {
+	return b.Index.ToBytes()
+}
+
+func (b Block) GetIndexes() map[string]core.EntityIndex {
+	return map[string]core.EntityIndex{
+		"id": {
+			Fields: []string{"Index"},
+		},
+		"byHash": {
+			Fields: []string{"Hash"},
+		},
+	}
+}
+
+func (a Block) GetObjectType() uint8 {
+	return core.BlockType
 }

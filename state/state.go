@@ -1,70 +1,61 @@
 package state
 
 import (
-	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/MetalBlockchain/metalgo/codec"
-	"github.com/MetalBlockchain/metalgo/database"
-	"github.com/MetalBlockchain/metalgo/database/versiondb"
+	"github.com/MetalBlockchain/metalgo/ids"
+	"github.com/dgraph-io/badger/v3"
 )
 
 var (
-	_              State      = &s{}
-	_              core.State = &s{}
-	initializedKey            = []byte("initialized")
+	initializedKey = []byte("initialized")
 )
 
-type State interface {
-	BlockState
-	AccountState
-	PermissionState
-	TransactionState
-
-	Commit() error
-	Close() error
-	IsInitialized() (bool, error)
-	SetInitialized() error
+type State struct {
+	db           *badger.DB
+	sequences    map[string]*badger.Sequence
+	lastAccepted ids.ID
+	vm           VM
 }
 
-type s struct {
-	BlockState
-	AccountState
-	PermissionState
-	TransactionState
-	baseDB *versiondb.Database
-}
-
-func NewState(vm VM, db database.Database) State {
-	baseDB := versiondb.New(db)
-
-	return &s{
-		BlockState:       NewBlockState(vm, baseDB),
-		AccountState:     NewAccountState(baseDB),
-		PermissionState:  NewPermissionState(baseDB),
-		TransactionState: NewTransactionState(baseDB),
-		baseDB:           baseDB,
+func NewState(vm VM, db *badger.DB) *State {
+	return &State{
+		vm:        vm,
+		db:        db,
+		sequences: make(map[string]*badger.Sequence),
 	}
 }
 
-func (s *s) Commit() error {
-	return s.baseDB.Commit()
+func (s *State) CreateSession(update bool) *Session {
+	transaction := s.db.NewTransaction(update)
+
+	return NewSession(s, transaction)
 }
 
-func (s *s) Close() error {
-	return s.baseDB.Close()
+func (s *State) Close() error {
+	return s.db.Close()
 }
 
-func (s *s) IsInitialized() (bool, error) {
-	return s.baseDB.Has(initializedKey)
+func (s *State) IsInitialized() (bool, error) {
+	err := s.db.View(func(txn *badger.Txn) error {
+		if _, err := txn.Get(initializedKey); err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		if err == badger.ErrKeyNotFound {
+			return false, nil
+		}
+
+		return false, err
+	}
+
+	return true, nil
 }
 
-func (s *s) SetInitialized() error {
-	return s.baseDB.Put(initializedKey, []byte{1})
-}
-
-func (s *s) GetCodec() codec.Manager {
-	return Codec
-}
-
-func (s *s) GetCodecVersion() int {
-	return CodecVersion
+func (s *State) SetInitialized() error {
+	return s.db.Update(func(txn *badger.Txn) error {
+		return txn.Set(initializedKey, []byte{1})
+	})
 }

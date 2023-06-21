@@ -812,7 +812,7 @@ func (a *applyContext) SetActionReturnValue(value []byte) {
 }
 
 func (a *applyContext) GetPackedTransaction() *core.PackedTransaction {
-	return a.TrxContext.Trx
+	return a.TrxContext.PackedTrx
 }
 
 func (a *applyContext) IsContextPrivileged() bool {

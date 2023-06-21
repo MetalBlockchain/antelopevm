@@ -11,6 +11,7 @@ type Context interface {
 	GetIdxDouble() MultiIndex[float64]
 	GetIdxLongDouble() MultiIndex[math.Float128]
 	GetAuthorizationManager() AuthorizationManager
+	GetResourceLimitsManager() ResourceLimitsManager
 	ReadMemory(start uint32, length uint32) []byte
 	WriteMemory(start uint32, data []byte)
 	GetMemorySize() uint32

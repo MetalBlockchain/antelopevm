@@ -10,6 +10,7 @@ import (
 	"github.com/MetalBlockchain/antelopevm/core/authority"
 	"github.com/MetalBlockchain/antelopevm/core/global"
 	"github.com/MetalBlockchain/antelopevm/core/name"
+	"github.com/MetalBlockchain/antelopevm/core/transaction"
 	"github.com/MetalBlockchain/antelopevm/state"
 	"github.com/MetalBlockchain/antelopevm/wasm/api"
 	log "github.com/inconshreveable/log15"
@@ -213,34 +214,37 @@ func (c *Controller) FindApplyHandler(receiver name.AccountName, scope name.Acco
 	return nil
 }
 
-func (c *Controller) PushTransaction(packedTrx core.PackedTransaction, block *state.Block, session *state.Session) (*core.TransactionTrace, error) {
+func (c *Controller) PushTransaction(trx transaction.TransactionMetaData, block *state.Block, session *state.Session) (*core.TransactionTrace, error) {
 	c.transactionMutex.Lock()
 	defer c.transactionMutex.Unlock()
-	trx, err := packedTrx.GetSignedTransaction()
+	//start := core.Now()
+	checkAuth := !trx.Implicit()
+	signedTransaction, err := trx.PackedTrx().GetSignedTransaction()
 
 	if err != nil {
 		return nil, err
+	}
+
+	trxContext := NewTransactionContext(c, session, trx.PackedTrx(), trx.Id(), block)
+
+	if trx.Implicit() {
+		if err := trxContext.InitForImplicitTransaction(0); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := trxContext.InitForInputTransaction(uint64(trx.PackedTrx().GetUnprunableSize()), uint64(trx.PackedTrx().GetPrunableSize())); err != nil {
+			return nil, err
+		}
 	}
 
 	// Check authority
-	keys, err := trx.GetSignatureKeys(&c.ChainId, false, true)
+	if checkAuth {
+		authorizationManager := c.GetAuthorizationManager(session)
 
-	if err != nil {
-		return nil, err
-	}
-
-	authorizationManager := c.GetAuthorizationManager(session)
-
-	if err := authorizationManager.CheckAuthorization(trx.Actions, keys, []authority.PermissionLevel{}, false, nil); err != nil {
-		log.Error("failed to check transaction authorization", "error", err)
-		return nil, err
-	}
-
-	trxContext := NewTransactionContext(c, session, &packedTrx, trx.ID(), block)
-
-	if err := trxContext.Init(); err != nil {
-		log.Error("failed to init transaction context", "error", err)
-		return nil, err
+		if err := authorizationManager.CheckAuthorization(signedTransaction.Actions, trx.RecoveredKeys(), []authority.PermissionLevel{}, false, nil); err != nil {
+			log.Error("failed to check transaction authorization", "error", err)
+			return nil, err
+		}
 	}
 
 	if err := trxContext.Exec(); err != nil {
@@ -253,14 +257,14 @@ func (c *Controller) PushTransaction(packedTrx core.PackedTransaction, block *st
 		return nil, err
 	}
 
-	trxContext.Trace.Hash = packedTrx.Id
+	trxContext.Trace.Hash = trx.Id()
 	trxContext.Trace.Receipt = core.TransactionReceipt{
 		TransactionReceiptHeader: core.TransactionReceiptHeader{
 			Status:        core.TransactionStatusExecuted,
 			CpuUsageUs:    uint32(trxContext.BilledCpuTimeUs),
 			NetUsageWords: core.Vuint32(0),
 		},
-		Transaction: packedTrx,
+		Transaction: *trx.PackedTrx(),
 	}
 
 	return trxContext.Trace, nil

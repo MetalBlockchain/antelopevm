@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 )
 
+//go:generate msgp
 type HexBytes []byte
 
 func (t HexBytes) Size() int {
-	return len([]byte(t))
+	return len(t)
 }
 
 func (t HexBytes) MarshalJSON() ([]byte, error) {

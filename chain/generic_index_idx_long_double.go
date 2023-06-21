@@ -3,16 +3,19 @@ package chain
 import (
 	"fmt"
 
-	"github.com/MetalBlockchain/antelopevm/core"
 	"github.com/MetalBlockchain/antelopevm/core/contract"
+	"github.com/MetalBlockchain/antelopevm/core/name"
 	"github.com/MetalBlockchain/antelopevm/math"
+	wasmApi "github.com/MetalBlockchain/antelopevm/wasm/api"
 )
+
+var _ wasmApi.MultiIndex[math.Float128] = &IdxLongDouble{}
 
 type IdxLongDouble struct {
 	Context *applyContext
 }
 
-func (i *IdxLongDouble) Store(scope core.ScopeName, tableName core.TableName, payer core.AccountName, primaryKey uint64, secondaryKey math.Float128) (int, error) {
+func (i *IdxLongDouble) Store(scope name.ScopeName, tableName name.TableName, payer name.AccountName, primaryKey uint64, secondaryKey math.Float128) (int, error) {
 	if payer.IsEmpty() {
 		return -1, errInvalidTablePayer
 	}
@@ -81,7 +84,7 @@ func (i *IdxLongDouble) Remove(iterator int) error {
 	return nil
 }
 
-func (i *IdxLongDouble) Update(iterator int, payer core.AccountName, secondaryKey math.Float128) error {
+func (i *IdxLongDouble) Update(iterator int, payer name.AccountName, secondaryKey math.Float128) error {
 	obj, ok := i.Context.KeyValueCache.get(iterator).(*contract.IndexLongDoubleObject)
 
 	if !ok {
@@ -112,7 +115,7 @@ func (i *IdxLongDouble) Update(iterator int, payer core.AccountName, secondaryKe
 	})
 }
 
-func (i *IdxLongDouble) FindSecondary(code core.AccountName, scope core.ScopeName, tableName core.TableName, secondaryKey *math.Float128, primaryKey *uint64) int {
+func (i *IdxLongDouble) FindSecondary(code name.AccountName, scope name.ScopeName, tableName name.TableName, secondaryKey *math.Float128, primaryKey *uint64) int {
 	table, err := i.Context.Session.FindTableByCodeScopeTable(code, scope, tableName)
 
 	if err != nil {
@@ -130,7 +133,7 @@ func (i *IdxLongDouble) FindSecondary(code core.AccountName, scope core.ScopeNam
 	return endIterator
 }
 
-func (i *IdxLongDouble) LowerboundSecondary(code core.AccountName, scope core.ScopeName, tableName core.TableName, secondaryKey *math.Float128, primaryKey *uint64) int {
+func (i *IdxLongDouble) LowerboundSecondary(code name.AccountName, scope name.ScopeName, tableName name.TableName, secondaryKey *math.Float128, primaryKey *uint64) int {
 	table, err := i.Context.Session.FindTableByCodeScopeTable(code, scope, tableName)
 
 	if err != nil {
@@ -150,7 +153,7 @@ func (i *IdxLongDouble) LowerboundSecondary(code core.AccountName, scope core.Sc
 	return i.Context.KeyValueCache.add(obj)
 }
 
-func (i *IdxLongDouble) UpperboundSecondary(code core.AccountName, scope core.ScopeName, tableName core.TableName, secondaryKey *math.Float128, primaryKey *uint64) int {
+func (i *IdxLongDouble) UpperboundSecondary(code name.AccountName, scope name.ScopeName, tableName name.TableName, secondaryKey *math.Float128, primaryKey *uint64) int {
 	table, err := i.Context.Session.FindTableByCodeScopeTable(code, scope, tableName)
 
 	if err != nil {
@@ -170,7 +173,7 @@ func (i *IdxLongDouble) UpperboundSecondary(code core.AccountName, scope core.Sc
 	return i.Context.KeyValueCache.add(obj)
 }
 
-func (i *IdxLongDouble) EndSecondary(code core.AccountName, scope core.ScopeName, tableName core.TableName) int {
+func (i *IdxLongDouble) EndSecondary(code name.AccountName, scope name.ScopeName, tableName name.TableName) int {
 	table, err := i.Context.Session.FindTableByCodeScopeTable(code, scope, tableName)
 
 	if err != nil {
@@ -228,7 +231,7 @@ func (i *IdxLongDouble) PreviousSecondary(iterator int, primaryKey *uint64) (int
 	return i.Context.KeyValueCache.add(previousObj), nil
 }
 
-func (i *IdxLongDouble) FindPrimary(code core.AccountName, scope core.ScopeName, tableName core.TableName, secondaryKey *math.Float128, primaryKey uint64) int {
+func (i *IdxLongDouble) FindPrimary(code name.AccountName, scope name.ScopeName, tableName name.TableName, secondaryKey *math.Float128, primaryKey uint64) int {
 	table, err := i.Context.Session.FindTableByCodeScopeTable(code, scope, tableName)
 
 	if err != nil {
@@ -247,7 +250,7 @@ func (i *IdxLongDouble) FindPrimary(code core.AccountName, scope core.ScopeName,
 	return i.Context.KeyValueCache.add(obj)
 }
 
-func (i *IdxLongDouble) LowerboundPrimary(code core.AccountName, scope core.ScopeName, tableName core.TableName, primaryKey uint64) int {
+func (i *IdxLongDouble) LowerboundPrimary(code name.AccountName, scope name.ScopeName, tableName name.TableName, primaryKey uint64) int {
 	table, err := i.Context.Session.FindTableByCodeScopeTable(code, scope, tableName)
 
 	if err != nil {
@@ -264,7 +267,7 @@ func (i *IdxLongDouble) LowerboundPrimary(code core.AccountName, scope core.Scop
 	return i.Context.KeyValueCache.add(obj)
 }
 
-func (i *IdxLongDouble) UpperboundPrimary(code core.AccountName, scope core.ScopeName, tableName core.TableName, primaryKey uint64) int {
+func (i *IdxLongDouble) UpperboundPrimary(code name.AccountName, scope name.ScopeName, tableName name.TableName, primaryKey uint64) int {
 	table, err := i.Context.Session.FindTableByCodeScopeTable(code, scope, tableName)
 
 	if err != nil {

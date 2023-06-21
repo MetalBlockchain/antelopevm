@@ -41,13 +41,15 @@ type GetBlockResponse struct {
 }
 
 func NewGetBlockResponse(block *state.Block) GetBlockResponse {
+	transactions := append([]core.TransactionReceipt{}, block.Transactions...)
+
 	return GetBlockResponse{
-		Timestamp:    block.Created.String(),
+		Timestamp:    block.Header.Created.String(),
 		Producer:     "eosio",
 		Confirmed:    1,
-		Previous:     block.PreviousBlock.Hex(),
+		Previous:     block.Header.PreviousBlockHash.Hex(),
 		ID:           block.ID().Hex(),
-		BlockNum:     block.Index,
-		Transactions: block.Transactions,
+		BlockNum:     block.Header.Index,
+		Transactions: transactions,
 	}
 }

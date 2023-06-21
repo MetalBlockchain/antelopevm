@@ -14,10 +14,14 @@ type TransactionReceipt core.TransactionReceipt
 
 func (t *TransactionReceipt) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
-		core.TransactionReceiptHeader `json:"signatures"`
-		Transactions                  []interface{} `json:"trx"`
+		Status        core.TransactionStatus `json:"status"`
+		CpuUsageUs    uint32                 `json:"cpu_usage_us"`
+		NetUsageWords core.Vuint32           `json:"net_usage_words"`
+		Transactions  []interface{}          `json:"trx"`
 	}{
-		TransactionReceiptHeader: t.TransactionReceiptHeader,
+		CpuUsageUs:    t.TransactionReceiptHeader.CpuUsageUs,
+		NetUsageWords: t.TransactionReceiptHeader.NetUsageWords,
+		Status:        t.TransactionReceiptHeader.Status,
 		Transactions: []interface{}{
 			1,
 			t.Transaction,
@@ -31,7 +35,7 @@ type TransactionMetaData struct {
 }
 
 type GetTransactionResponse struct {
-	BlockNum              uint32                 `json:"block_num"`
+	BlockNum              uint64                 `json:"block_num"`
 	BlockTime             string                 `json:"block_time"`
 	HeadBlockNum          uint32                 `json:"head_block_num"`
 	Id                    core.TransactionIdType `json:"id"`

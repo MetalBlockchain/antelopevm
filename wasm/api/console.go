@@ -5,7 +5,7 @@ import (
 	"math"
 	"strconv"
 
-	"github.com/MetalBlockchain/antelopevm/core"
+	"github.com/MetalBlockchain/antelopevm/core/name"
 	"github.com/MetalBlockchain/antelopevm/crypto/rlp"
 	antelopeMath "github.com/MetalBlockchain/antelopevm/math"
 )
@@ -123,8 +123,8 @@ func printqf(context Context) func(uint32, uint32) {
 	}
 }
 
-func printn(context Context) func(core.Name) {
-	return func(value core.Name) {
+func printn(context Context) func(name.Name) {
+	return func(value name.Name) {
 		context.GetApplyContext().ConsoleAppend(value.String())
 	}
 }

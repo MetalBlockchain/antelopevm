@@ -9,6 +9,7 @@ import (
 
 const format = "2006-01-02T15:04:05"
 
+//go:generate msgp
 type Microseconds int64
 
 func MaxMicroseconds() Microseconds { return Microseconds(0x7fffffffffffffff) }

@@ -4,7 +4,7 @@
 GOPATH="$(go env GOPATH)"
 
 # Set binary location
-binary_path=${ANTELOPE_BINARY_PATH:-"$GOPATH/src/github.com/!metal!blockchain/metalgo/build/plugins/jukr5oTVE2KfmEGwDRCvQnXcwrzwyzRtwyfSGFGPyuyNc12Fs"}
+binary_path="build"
 
 # Avalabs docker hub
 dockerhub_repo="metalblockchain/metalgo"
@@ -20,4 +20,4 @@ echo "Using branch: ${current_branch}"
 antelope_commit="$(git --git-dir="$ANTELOPE_PATH/.git" rev-parse HEAD)"
 antelope_commit_id="${antelope_commit::8}"
 
-build_image_id=${BUILD_IMAGE_ID:-"$metal_version-$antelope_commit_id"}
+# build_image_id=${BUILD_IMAGE_ID:-"$metal_version-$antelope_commit_id"}

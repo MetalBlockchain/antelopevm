@@ -4,7 +4,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/MetalBlockchain/antelopevm/abi"
+	"github.com/MetalBlockchain/antelopevm/config"
 	"github.com/MetalBlockchain/antelopevm/core"
+	"github.com/MetalBlockchain/antelopevm/core/account"
+	"github.com/MetalBlockchain/antelopevm/core/name"
 	"github.com/MetalBlockchain/antelopevm/crypto"
 	"github.com/MetalBlockchain/antelopevm/crypto/rlp"
 )
@@ -13,20 +17,18 @@ var (
 	errDecode = fmt.Errorf("could not decode request body")
 )
 
-func applyEosioNewaccount(context *ApplyContext) error {
+func applyEosioNewaccount(context ApplyContext) error {
 	create := &NewAccount{}
-	if err := rlp.DecodeBytes(context.Act.Data, create); err != nil {
+	if err := rlp.DecodeBytes(context.GetAction().Data, create); err != nil {
 		return errDecode
 	}
 
-	if err := context.RequireAuthorization(int64(create.Creator)); err != nil {
+	if err := context.RequireAuthorization(create.Creator); err != nil {
 		return err
 	}
-
 	if !create.Owner.IsValid() {
 		return fmt.Errorf("invalid owner authority")
 	}
-
 	if !create.Active.IsValid() {
 		return fmt.Errorf("invalid active authority")
 	}
@@ -40,7 +42,7 @@ func applyEosioNewaccount(context *ApplyContext) error {
 	}
 
 	// Check if the creator is privileged
-	creator, err := context.State.GetAccountByName(create.Creator)
+	creator, err := context.GetSession().FindAccountByName(create.Creator)
 
 	if err == nil && !creator.Privileged {
 		if strings.HasPrefix(nameStr, "eosio.") {
@@ -48,28 +50,36 @@ func applyEosioNewaccount(context *ApplyContext) error {
 		}
 	}
 
-	_, err = context.State.GetAccountByName(create.Name)
+	_, err = context.GetSession().FindAccountByName(create.Name)
 	if err == nil {
 		return fmt.Errorf("cannot create account named %s, as that name is already taken", create.Name.String())
 	}
 
 	//blockTime := context.Control.PendingBlockTime()
-	newAccountObject := core.Account{Name: create.Name, CreationDate: core.BlockTimeStamp(core.Now())}
-	context.State.PutAccount(&newAccountObject)
+	newAccountObject := account.Account{Name: create.Name, CreationDate: core.Now()}
 
-	ownerPermission, _ := context.Authorization.CreatePermission(create.Name, core.StringToName("owner"), 0, create.Owner, core.TimePoint(0))
-	context.Authorization.CreatePermission(create.Name, core.StringToName("active"), ownerPermission.ID, create.Active, core.TimePoint(0))
+	if err := context.GetSession().CreateAccount(&newAccountObject); err != nil {
+		return err
+	}
+
+	if ownerPermission, err := context.GetAuthorizationManager().CreatePermission(create.Name, name.StringToName("owner"), 0, create.Owner, core.TimePoint(0)); err == nil {
+		if _, err := context.GetAuthorizationManager().CreatePermission(create.Name, name.StringToName("active"), ownerPermission.ID, create.Active, core.TimePoint(0)); err != nil {
+			return err
+		}
+	} else {
+		return err
+	}
 
 	return nil
 }
 
-func applyEosioSetCode(context *ApplyContext) error {
-	act := SetCode{}
-	if err := rlp.DecodeBytes(context.Act.Data, &act); err != nil {
+func applyEosioSetCode(context ApplyContext) error {
+	act := &SetCode{}
+	if err := rlp.DecodeBytes(context.GetAction().Data, act); err != nil {
 		return errDecode
 	}
 
-	if err := context.RequireAuthorization(int64(act.Account)); err != nil {
+	if err := context.RequireAuthorization(act.Account); err != nil {
 		return err
 	}
 
@@ -89,62 +99,81 @@ func applyEosioSetCode(context *ApplyContext) error {
 		// TODO: Validate WASM code
 	}
 
-	account, err := context.State.GetAccountByName(act.Account)
+	account, err := context.GetSession().FindAccountByName(act.Account)
 
 	if err != nil {
 		return fmt.Errorf("could not find account %s", act.Account.String())
 	}
 
-	context.State.UpdateAccount(account, func(a *core.Account) {
-		a.LastCodeUpdate = core.TimePoint(core.Now())
-		a.CodeVersion = *codeId
-
-		if codeSize > 0 {
-			a.Code = act.Code
-		}
-	})
-
 	if account.CodeVersion == *codeId {
 		return fmt.Errorf("contract is already running this version of code")
+	}
+
+	if err := context.GetSession().ModifyAccount(account, func() {
+		account.LastCodeUpdate = core.Now()
+		account.CodeVersion = *codeId
+
+		if codeSize > 0 {
+			account.Code = act.Code
+		}
+	}); err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func applyEosioSetAbi(context *ApplyContext) error {
-	act := SetAbi{}
-	if err := rlp.DecodeBytes(context.Act.Data, &act); err != nil {
+func applyEosioSetAbi(context ApplyContext) error {
+	act := &SetAbi{}
+	if err := rlp.DecodeBytes(context.GetAction().Data, act); err != nil {
 		return errDecode
 	}
 
-	if err := context.RequireAuthorization(int64(act.Account)); err != nil {
+	if err := context.RequireAuthorization(act.Account); err != nil {
 		return err
 	}
 
 	abiSize := len(act.Abi)
-	account, err := context.State.GetAccountByName(act.Account)
+	var abiId *crypto.Sha256
+
+	if abiSize > 0 {
+		abiId = crypto.Hash256(act.Abi)
+		// TODO: Validate WASM code
+	}
+
+	// Validate ABI
+	_, err := abi.NewABI(act.Abi)
 
 	if err != nil {
 		return err
 	}
 
-	context.State.UpdateAccount(account, func(a *core.Account) {
+	account, err := context.GetSession().FindAccountByName(act.Account)
+
+	if err != nil {
+		return err
+	}
+
+	if err := context.GetSession().ModifyAccount(account, func() {
 		if abiSize > 0 {
 			account.Abi = act.Abi
+			account.AbiVersion = *abiId
 			account.AbiSequence += 1
 		}
-	})
+	}); err != nil {
+		return err
+	}
 
 	return nil
 }
 
-func applyEosioUpdateAuth(context *ApplyContext) error {
+func applyEosioUpdateAuth(context ApplyContext) error {
 	act := UpdateAuth{}
-	if err := rlp.DecodeBytes(context.Act.Data, &act); err != nil {
+	if err := rlp.DecodeBytes(context.GetAction().Data, &act); err != nil {
 		return errDecode
 	}
 
-	if err := context.RequireAuthorization(int64(act.Account)); err != nil {
+	if err := context.RequireAuthorization(act.Account); err != nil {
 		return err
 	}
 
@@ -164,11 +193,11 @@ func applyEosioUpdateAuth(context *ApplyContext) error {
 		return fmt.Errorf("invalid authority")
 	}
 
-	if act.Permission == context.Control.Config.ActiveName {
-		if act.Parent != context.Control.Config.OwnerName {
+	if act.Permission == config.ActiveName {
+		if act.Parent != config.OwnerName {
 			return fmt.Errorf("cannot change active authority's parent from owner, update.parent %s", act.Parent.String())
 		}
-	} else if act.Permission == context.Control.Config.OwnerName {
+	} else if act.Permission == config.OwnerName {
 		if !act.Parent.IsEmpty() {
 			return fmt.Errorf("cannot change owner authority's parent")
 		}
@@ -178,11 +207,21 @@ func applyEosioUpdateAuth(context *ApplyContext) error {
 		return fmt.Errorf("delayed authority is currently not supported")
 	}
 
-	permission, _ := context.State.GetPermissionByOwner(act.Account, act.Permission)
+	permission, err := context.GetSession().FindPermissionByOwner(act.Account, act.Permission)
+
+	if err != nil {
+		return err
+	}
+
 	parentId := core.IdType(0)
 
-	if act.Permission != context.Control.Config.OwnerName {
-		parent, _ := context.State.GetPermissionByOwner(act.Account, act.Parent)
+	if act.Permission != config.OwnerName {
+		parent, err := context.GetSession().FindPermissionByOwner(act.Account, act.Parent)
+
+		if err != nil {
+			return err
+		}
+
 		parentId = parent.ID
 	}
 
@@ -191,11 +230,11 @@ func applyEosioUpdateAuth(context *ApplyContext) error {
 			return fmt.Errorf("changing parent authority is not currently supported")
 		}
 
-		if err := context.Authorization.ModifyPermission(permission, &act.Auth); err != nil {
+		if err := context.GetAuthorizationManager().ModifyPermission(permission, &act.Auth); err != nil {
 			return err
 		}
 	} else {
-		_, err := context.Authorization.CreatePermission(act.Account, act.Permission, parentId, act.Auth, core.TimePoint(0))
+		_, err := context.GetAuthorizationManager().CreatePermission(act.Account, act.Permission, parentId, act.Auth, core.TimePoint(0))
 
 		return err
 	}
@@ -203,9 +242,9 @@ func applyEosioUpdateAuth(context *ApplyContext) error {
 	return nil
 }
 
-func applyEosioLinkAuth(context *ApplyContext) error {
+func applyEosioLinkAuth(context ApplyContext) error {
 	act := LinkAuth{}
-	if err := rlp.DecodeBytes(context.Act.Data, &act); err != nil {
+	if err := rlp.DecodeBytes(context.GetAction().Data, &act); err != nil {
 		return errDecode
 	}
 
@@ -213,25 +252,25 @@ func applyEosioLinkAuth(context *ApplyContext) error {
 		return fmt.Errorf("required permission cannot be empty")
 	}
 
-	if err := context.RequireAuthorization(int64(act.Account)); err != nil {
+	if err := context.RequireAuthorization(act.Account); err != nil {
 		return err
 	}
 
-	if act.Requirement != core.PermissionName(context.Control.Config.EosioAnyName) {
-		if _, err := context.State.GetPermissionByOwner(act.Account, act.Requirement); err != nil {
-			return fmt.Errorf("failed to retrieve permission %s", core.NameToString(uint64(act.Requirement)))
+	if act.Requirement != name.PermissionName(config.EosioAnyName) {
+		if _, err := context.GetSession().FindPermissionByOwner(act.Account, act.Requirement); err != nil {
+			return fmt.Errorf("failed to retrieve permission %s", name.NameToString(uint64(act.Requirement)))
 		}
 	}
 
-	permissionLink, err := context.State.GetPermissionLinkByActionName(act.Account, act.Code, act.Type)
+	permissionLink, err := context.GetSession().FindPermissionLinkByActionName(act.Account, act.Code, act.Type)
 
 	if err == nil {
 		if permissionLink.RequiredPermission == act.Requirement {
 			return fmt.Errorf("attempting to update required authority, but new requirement is same as old")
 		}
 
-		if err := context.State.UpdatePermissionLink(permissionLink, func(pl *core.PermissionLink) {
-			pl.RequiredPermission = act.Requirement
+		if err := context.GetSession().ModifyPermissionLink(permissionLink, func() {
+			permissionLink.RequiredPermission = act.Requirement
 		}); err != nil {
 			return err
 		}
@@ -243,7 +282,7 @@ func applyEosioLinkAuth(context *ApplyContext) error {
 			RequiredPermission: act.Requirement,
 		}
 
-		if err := context.State.PutPermissionLink(permissionLink); err != nil {
+		if err := context.GetSession().CreatePermissionLink(permissionLink); err != nil {
 			return err
 		}
 	}
@@ -251,59 +290,60 @@ func applyEosioLinkAuth(context *ApplyContext) error {
 	return nil
 }
 
-func applyEosioUnlinkAuth(context *ApplyContext) error {
+func applyEosioUnlinkAuth(context ApplyContext) error {
 	act := UnLinkAuth{}
-	if err := rlp.DecodeBytes(context.Act.Data, &act); err != nil {
+	if err := rlp.DecodeBytes(context.GetAction().Data, &act); err != nil {
 		return errDecode
 	}
 
-	if err := context.RequireAuthorization(int64(act.Account)); err != nil {
+	if err := context.RequireAuthorization(act.Account); err != nil {
 		return err
 	}
 
-	permissionLink, err := context.State.GetPermissionLinkByActionName(act.Account, act.Code, act.Type)
+	permissionLink, err := context.GetSession().FindPermissionLinkByActionName(act.Account, act.Code, act.Type)
 
 	if err != nil {
 		return fmt.Errorf("attempting to unlink authority, but no link found")
 	}
 
-	if err := context.State.RemovePermissionLink(permissionLink); err != nil {
+	if err := context.GetSession().RemovePermissionLink(permissionLink); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func applyEosioDeleteAuth(context *ApplyContext) error {
+func applyEosioDeleteAuth(context ApplyContext) error {
 	act := DeleteAuth{}
-	if err := rlp.DecodeBytes(context.Act.Data, &act); err != nil {
+	if err := rlp.DecodeBytes(context.GetAction().Data, &act); err != nil {
 		return errDecode
 	}
 
-	if err := context.RequireAuthorization(int64(act.Account)); err != nil {
+	if err := context.RequireAuthorization(act.Account); err != nil {
 		return err
 	}
 
-	if act.Permission == context.Control.Config.OwnerName {
+	if act.Permission == config.OwnerName {
 		return fmt.Errorf("cannot delete owner authority")
-	} else if act.Permission == context.Control.Config.ActiveName {
+	} else if act.Permission == config.ActiveName {
 		return fmt.Errorf("cannot delete active authority")
 	}
 
-	permission, err := context.State.GetPermissionByOwner(act.Account, act.Permission)
+	permission, err := context.GetSession().FindPermissionByOwner(act.Account, act.Permission)
 
 	if err != nil {
 		return fmt.Errorf("cannot remove non-existing permission")
 	}
 
-	iterator := context.State.GetPermissionLinksByPermissionName(act.Account, act.Permission)
+	// TODO: Fix
+	/* iterator := context.GetSession().GetPermissionLinksByPermissionName(act.Account, act.Permission)
 	defer iterator.Release()
 
 	if iterator.Next() {
 		return fmt.Errorf("cannot delete a linked authority, remove the links first")
-	}
+	} */
 
-	if err := context.State.RemovePermission(permission); err != nil {
+	if err := context.GetSession().RemovePermission(permission); err != nil {
 		return err
 	}
 

@@ -1,4 +1,4 @@
-package service
+package chain_api_plugin
 
 import (
 	"github.com/MetalBlockchain/antelopevm/core"
@@ -27,14 +27,14 @@ func NewChainInfoResponse(version string, lastAcceptedBlock *state.Block, chainI
 	return &ChainInfoResponse{
 		ServerVersion:            version,
 		ServerVersionString:      version,
-		HeadBlockNum:             lastAcceptedBlock.Index,
+		HeadBlockNum:             lastAcceptedBlock.Header.Index,
 		HeadBlockId:              lastAcceptedBlock.ID().Hex(),
-		HeadBlockTime:            lastAcceptedBlock.Created.String(),
+		HeadBlockTime:            lastAcceptedBlock.Header.Created.String(),
 		HeadBlockProducer:        "eosio",
 		ChainId:                  chainId,
-		LastIrreversibleBlockNum: lastAcceptedBlock.Index,
+		LastIrreversibleBlockNum: lastAcceptedBlock.Header.Index,
 		LastIrreversibleBlockId:  lastAcceptedBlock.ID().Hex(),
-		ForkDbBlockNum:           lastAcceptedBlock.Index,
+		ForkDbBlockNum:           lastAcceptedBlock.Header.Index,
 		ForkDbBlockId:            lastAcceptedBlock.ID().Hex(),
 		VirtualBlockCpuLimit:     200000000,
 		VirtualBlockNetLimit:     1048576000,

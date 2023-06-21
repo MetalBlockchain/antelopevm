@@ -5,6 +5,7 @@ import (
 	"fmt"
 )
 
+//go:generate msgp
 type Vuint32 uint32
 
 func (v Vuint32) Pack() ([]byte, error) {

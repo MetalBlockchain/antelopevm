@@ -2,6 +2,8 @@ package api
 
 import (
 	"github.com/MetalBlockchain/antelopevm/core"
+	"github.com/MetalBlockchain/antelopevm/core/authority"
+	"github.com/MetalBlockchain/antelopevm/core/name"
 	"github.com/MetalBlockchain/antelopevm/crypto/ecc"
 	"github.com/MetalBlockchain/antelopevm/crypto/rlp"
 	"github.com/hashicorp/go-set"
@@ -44,8 +46,8 @@ func checkTransactionAuthorization(context Context) func(uint32, uint32, uint32,
 	}
 }
 
-func checkPermissionAuthorization(context Context) func(core.AccountName, core.PermissionName, uint32, uint32, uint32, uint32, uint64) int32 {
-	return func(account core.AccountName, permission core.PermissionName, pubKeys, pubKeysSize, perms, permsSize uint32, delay uint64) int32 {
+func checkPermissionAuthorization(context Context) func(name.AccountName, name.PermissionName, uint32, uint32, uint32, uint32, uint64) int32 {
+	return func(account name.AccountName, permission name.PermissionName, pubKeys, pubKeysSize, perms, permsSize uint32, delay uint64) int32 {
 		pubKeysBytes := context.ReadMemory(pubKeys, pubKeysSize)
 		permsBytes := context.ReadMemory(perms, permsSize)
 
@@ -63,9 +65,9 @@ func checkPermissionAuthorization(context Context) func(core.AccountName, core.P
 	}
 }
 
-func getPermissionLastUsed(context Context) func(core.AccountName, core.PermissionName) int64 {
-	return func(account core.AccountName, permissionName core.PermissionName) int64 {
-		permission, err := context.GetAuthorizationManager().GetPermission(core.PermissionLevel{Actor: account, Permission: permissionName})
+func getPermissionLastUsed(context Context) func(name.AccountName, name.PermissionName) int64 {
+	return func(account name.AccountName, permissionName name.PermissionName) int64 {
+		permission, err := context.GetAuthorizationManager().GetPermission(authority.PermissionLevel{Actor: account, Permission: permissionName})
 
 		if err != nil {
 			panic(err)
@@ -75,8 +77,8 @@ func getPermissionLastUsed(context Context) func(core.AccountName, core.Permissi
 	}
 }
 
-func getAccountCreationTime(context Context) func(core.AccountName) int64 {
-	return func(accountName core.AccountName) int64 {
+func getAccountCreationTime(context Context) func(name.AccountName) int64 {
+	return func(accountName name.AccountName) int64 {
 		account, err := context.GetApplyContext().FindAccount(accountName)
 
 		if err != nil {
@@ -101,12 +103,12 @@ func buildPublicKeySet(data []byte) *set.HashSet[ecc.PublicKey, string] {
 	return set
 }
 
-func buildPermissionLevelSet(data []byte) *set.HashSet[core.PermissionLevel, string] {
-	v := []core.PermissionLevel{}
+func buildPermissionLevelSet(data []byte) *set.HashSet[authority.PermissionLevel, string] {
+	v := []authority.PermissionLevel{}
 	if err := rlp.DecodeBytes(data, v); err != nil {
 		panic("could not decode permission level array")
 	}
-	set := set.NewHashSet[core.PermissionLevel, string](len(v))
+	set := set.NewHashSet[authority.PermissionLevel, string](len(v))
 
 	for i := range v {
 		set.Insert(v[i])

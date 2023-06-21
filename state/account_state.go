@@ -1,160 +1,78 @@
 package state
 
 import (
-	"encoding/binary"
-
 	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/MetalBlockchain/metalgo/cache"
-	"github.com/MetalBlockchain/metalgo/database"
+	"github.com/MetalBlockchain/antelopevm/core/account"
+	"github.com/MetalBlockchain/antelopevm/core/name"
 )
 
-const (
-	// maximum block capacity of the cache
-	accountCacheSize = 8192
-)
-
-var (
-	accountIncrementKey = []byte("Account__id")
-	accountIdKey        = []byte("Account__id__")
-	accountNameKey      = []byte("Account__byName__")
-)
-
-var _ AccountState = &accountState{}
-
-type AccountState interface {
-	GetAccountByName(core.AccountName) (*core.Account, error)
-	PutAccount(*core.Account) error
-	UpdateAccount(*core.Account, func(*core.Account)) error
-}
-
-type accountState struct {
-	accCache cache.Cacher
-	db       database.Database
-}
-
-func NewAccountState(db database.Database) AccountState {
-	return &accountState{
-		accCache: &cache.LRU{Size: accountCacheSize},
-		db:       db,
+func (s *Session) FindAccount(id core.IdType) (*account.Account, error) {
+	if obj, found := s.accountCache.Get(id); found {
+		return obj, nil
 	}
-}
 
-func (s *accountState) GetAccount(id []byte) (*core.Account, error) {
-	key := append(accountIdKey, id...)
-	wrappedBytes, err := s.db.Get(key)
+	key := getObjectKeyByIndex(&account.Account{ID: id}, "id")
+	item, err := s.transaction.Get(key)
 
 	if err != nil {
 		return nil, err
 	}
 
-	account := &core.Account{}
-
-	if _, err := Codec.Unmarshal(wrappedBytes, account); err != nil {
-		return nil, err
-	}
-
-	return account, nil
-}
-
-func (s *accountState) GetAccountByName(name core.AccountName) (*core.Account, error) {
-	nameBytes, _ := name.Pack()
-	byNameKey := append(accountNameKey, nameBytes...)
-	wrappedBytes, err := s.db.Get(byNameKey)
+	data, err := item.ValueCopy(nil)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return s.GetAccount(wrappedBytes)
+	out := &account.Account{}
+
+	if _, err := out.UnmarshalMsg(data); err != nil {
+		return nil, err
+	}
+
+	s.accountCache.Put(id, out)
+
+	return out, nil
 }
 
-func (s *accountState) UpdateAccount(account *core.Account, updateFunc func(*core.Account)) error {
-	if _, err := s.GetAccount(account.ID.ToBytes()); err != nil {
-		return err
+func (s *Session) FindAccountByName(name name.AccountName) (*account.Account, error) {
+	key := getObjectKeyByIndex(&account.Account{Name: name}, "byName")
+	item, err := s.transaction.Get(key)
+
+	if err != nil {
+		return nil, err
 	}
 
-	// Perform updates
-	oldIndexKeys := getAccountIndexKeys(*account)
-	updateFunc(account)
-	newIndexKeys := getAccountIndexKeys(*account)
-	batch := s.db.NewBatch()
+	data, err := item.ValueCopy(nil)
 
-	for _, key := range oldIndexKeys {
-		if err := batch.Delete(key); err != nil {
-			return err
-		}
+	if err != nil {
+		return nil, err
 	}
 
-	for _, key := range newIndexKeys {
-		if err := batch.Put(key, account.ID.ToBytes()); err != nil {
-			return err
-		}
-	}
+	return s.FindAccount(core.NewIdType(data))
+}
 
-	wrappedBytes, err := Codec.Marshal(CodecVersion, &account)
+func (s *Session) CreateAccount(in *account.Account) error {
+	err := s.create(true, func(id core.IdType) error {
+		in.ID = id
+		return nil
+	}, in)
 
 	if err != nil {
 		return err
 	}
 
-	key := append(accountIdKey, account.ID.ToBytes()...)
+	s.accountCache.Put(in.ID, in)
 
-	if err = batch.Put(key, wrappedBytes); err != nil {
+	return nil
+}
+
+func (s *Session) ModifyAccount(in *account.Account, modifyFunc func()) error {
+	if err := s.modify(in, modifyFunc); err != nil {
 		return err
 	}
 
-	return batch.Write()
-}
+	s.accountCache.Put(in.ID, in)
 
-func (s *accountState) PutAccount(account *core.Account) error {
-	wrappedBytes, err := Codec.Marshal(CodecVersion, &account)
-
-	if err != nil {
-		return err
-	}
-
-	nameBytes, _ := account.Name.Pack()
-
-	id, err := s.GenerateAccountId()
-
-	if err != nil {
-		return err
-	}
-
-	account.ID = core.IdType(id)
-	batch := s.db.NewBatch()
-	key := append(accountIdKey, account.ID.ToBytes()...)
-	byNameKey := append(accountNameKey, nameBytes...)
-
-	batch.Put(key, wrappedBytes)
-	batch.Put(byNameKey, account.ID.ToBytes())
-
-	return batch.Write()
-}
-
-func (s *accountState) GenerateAccountId() (uint64, error) {
-	var id uint64
-
-	if value, err := s.db.Get(accountIncrementKey); err == nil {
-		id = binary.BigEndian.Uint64(value) + 1
-	}
-
-	newValue := make([]byte, 8)
-	binary.BigEndian.PutUint64(newValue, uint64(id))
-
-	if err := s.db.Put(accountIncrementKey, newValue); err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
-func getAccountIndexKeys(account core.Account) map[string][]byte {
-	keys := make(map[string][]byte)
-	nameBytes, _ := account.Name.Pack()
-	byName := append(accountNameKey, nameBytes...)
-
-	keys["byName"] = byName
-
-	return keys
+	return nil
 }

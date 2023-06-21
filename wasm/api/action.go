@@ -1,8 +1,6 @@
 package api
 
-import (
-	"github.com/MetalBlockchain/antelopevm/core"
-)
+import "github.com/MetalBlockchain/antelopevm/core/name"
 
 func GetActionFunctions(context Context) map[string]interface{} {
 	functions := make(map[string]interface{})
@@ -33,8 +31,8 @@ func actionDataSize(context Context) func() uint32 {
 	}
 }
 
-func currentReceiver(context Context) func() core.AccountName {
-	return func() core.AccountName {
+func currentReceiver(context Context) func() name.AccountName {
+	return func() name.AccountName {
 		return context.GetApplyContext().GetReceiver()
 	}
 }

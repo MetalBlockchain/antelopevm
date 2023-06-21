@@ -1,7 +1,9 @@
 package api
 
 import (
+	"github.com/MetalBlockchain/antelopevm/config"
 	"github.com/MetalBlockchain/antelopevm/core"
+	"github.com/MetalBlockchain/antelopevm/core/name"
 	"github.com/MetalBlockchain/antelopevm/crypto/rlp"
 )
 
@@ -18,7 +20,7 @@ func GetTransactionFunctions(context Context) map[string]interface{} {
 
 func sendInline(context Context) func(uint32, uint32) {
 	return func(ptr uint32, length uint32) {
-		if length >= uint32(context.GetController().GetConfig().MaxInlineActionSize) {
+		if length >= uint32(config.MaxInlineActionSize) {
 			panic("inline action too big")
 		}
 
@@ -37,7 +39,7 @@ func sendInline(context Context) func(uint32, uint32) {
 
 func sendContextFreeInline(context Context) func(uint32, uint32) {
 	return func(ptr uint32, length uint32) {
-		if length >= uint32(context.GetController().GetConfig().MaxInlineActionSize) {
+		if length >= uint32(config.MaxInlineActionSize) {
 			panic("inline action too big")
 		}
 
@@ -54,8 +56,8 @@ func sendContextFreeInline(context Context) func(uint32, uint32) {
 	}
 }
 
-func sendDeferred(context Context) func(uint32, core.AccountName, uint32, uint32, uint32) {
-	return func(ptrSender uint32, payer core.AccountName, ptrData, ptrLength, replaceExisting uint32) {
+func sendDeferred(context Context) func(uint32, name.AccountName, uint32, uint32, uint32) {
+	return func(ptrSender uint32, payer name.AccountName, ptrData, ptrLength, replaceExisting uint32) {
 		panic("not implemented")
 	}
 }

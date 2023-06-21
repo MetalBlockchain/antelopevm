@@ -1,7 +1,10 @@
 package core
 
-import "encoding/json"
+import (
+	"encoding/json"
+)
 
+//go:generate msgp
 type CompressionType uint8
 
 const (
@@ -27,8 +30,23 @@ func (c CompressionType) MarshalJSON() ([]byte, error) {
 func (c *CompressionType) UnmarshalJSON(data []byte) error {
 	var s string
 	err := json.Unmarshal(data, &s)
+
 	if err != nil {
-		return err
+		var i uint8
+		err = json.Unmarshal(data, &i)
+
+		if err != nil {
+			return err
+		}
+
+		switch i {
+		case uint8(CompressionZlib):
+			*c = CompressionZlib
+		default:
+			*c = CompressionNone
+		}
+
+		return nil
 	}
 
 	switch s {
