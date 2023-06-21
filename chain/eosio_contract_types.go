@@ -1,47 +1,50 @@
 package chain
 
-import "github.com/MetalBlockchain/antelopevm/core"
+import (
+	"github.com/MetalBlockchain/antelopevm/core/authority"
+	"github.com/MetalBlockchain/antelopevm/core/name"
+)
 
 type NewAccount struct {
-	Creator core.AccountName `json:"creator"`
-	Name    core.AccountName `json:"name"`
-	Owner   core.Authority   `json:"owner"`
-	Active  core.Authority   `json:"active"`
+	Creator name.AccountName    `json:"creator"`
+	Name    name.AccountName    `json:"name"`
+	Owner   authority.Authority `json:"owner"`
+	Active  authority.Authority `json:"active"`
 }
 
 type SetCode struct {
-	Account   core.AccountName `json:"account"`
+	Account   name.AccountName `json:"account"`
 	VmType    uint8            `json:"vmtype"`
 	VmVersion uint8            `json:"vmversion"`
 	Code      []byte           `json:"code"`
 }
 
 type SetAbi struct {
-	Account core.AccountName `json:"account"`
+	Account name.AccountName `json:"account"`
 	Abi     []byte           `json:"abi"`
 }
 
 type UpdateAuth struct {
-	Account    core.AccountName    `json:"account"`
-	Permission core.PermissionName `json:"permission"`
-	Parent     core.PermissionName `json:"parent"`
-	Auth       core.Authority      `json:"auth"`
+	Account    name.AccountName    `json:"account"`
+	Permission name.PermissionName `json:"permission"`
+	Parent     name.PermissionName `json:"parent"`
+	Auth       authority.Authority `json:"auth"`
 }
 
 type DeleteAuth struct {
-	Account    core.AccountName    `json:""`
-	Permission core.PermissionName `json:""`
+	Account    name.AccountName    `json:""`
+	Permission name.PermissionName `json:""`
 }
 
 type LinkAuth struct {
-	Account     core.AccountName    `json:"account"`
-	Code        core.AccountName    `json:"code"`
-	Type        core.ActionName     `json:"type"`
-	Requirement core.PermissionName `json:"requirement"`
+	Account     name.AccountName    `json:"account"`
+	Code        name.AccountName    `json:"code"`
+	Type        name.ActionName     `json:"type"`
+	Requirement name.PermissionName `json:"requirement"`
 }
 
 type UnLinkAuth struct {
-	Account core.AccountName `json:"account"`
-	Code    core.AccountName `json:"code"`
-	Type    core.ActionName  `json:"type"`
+	Account name.AccountName `json:"account"`
+	Code    name.AccountName `json:"code"`
+	Type    name.ActionName  `json:"type"`
 }
