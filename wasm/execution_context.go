@@ -54,55 +54,38 @@ func NewWasmExecutionContext(context context.Context,
 	}
 }
 
-func (c *ExecutionContext) Initialize() error {
-	c.context, c.cancelFunc = context.WithTimeout(context.Background(), 32*time.Nanosecond)
-	c.engine = wazero.NewRuntime(c.context)
+func (c *ExecutionContext) Exec(wasmCode []byte) error {
+	ctx, _ := context.WithTimeout(context.Background(), 32*time.Nanosecond)
+	runtime := wazero.NewRuntime(c.context)
+	// This closes everything this runtime created
+	defer runtime.Close(ctx)
+	builder := c.engine.NewHostModuleBuilder("env")
 
-	if _, err := c.engine.NewHostModuleBuilder("env").
-		ExportFunctions(wasmApi.GetActionFunctions(c)).
-		ExportFunctions(wasmApi.GetAccountFunctions(c)).
-		ExportFunctions(wasmApi.GetContextFreeSystemFunctions(c)).
-		ExportFunctions(wasmApi.GetContextFreeTransactionFunctions(c)).
-		ExportFunctions(wasmApi.GetMemoryFunctions(c)).
-		ExportFunctions(wasmApi.GetConsoleFunctions(c)).
-		ExportFunctions(wasmApi.GetContextFreeFunctions(c)).
-		ExportFunctions(wasmApi.GetCompilerBuiltinFunctions(c)).
-		ExportFunctions(GetSystemFunctions(c)).
-		ExportFunctions(wasmApi.GetDatabaseFunctions(c)).
-		ExportFunctions(wasmApi.GetCryptoFunctions(c)).
-		ExportFunctions(wasmApi.GetPermissionFunctions(c)).
-		ExportFunctions(wasmApi.GetPrivilegedFunctions(c)).
-		ExportFunctions(wasmApi.GetProducerFunctions(c)).
-		ExportFunctions(wasmApi.GetTransactionFunctions(c)).
-		Instantiate(c.context, c.engine); err != nil {
+	for name, f := range wasmApi.GetActionFunctions(c) {
+		builder.NewFunctionBuilder().WithFunc(f).Export(name)
+	}
+
+	if _, err := builder.Instantiate(ctx); err != nil {
 		return err
 	}
 
-	return nil
-}
-
-func (c *ExecutionContext) Exec(wasmCode []byte) error {
-	module, err := c.engine.InstantiateModuleFromBinary(c.context, wasmCode)
-
+	module, err := runtime.Instantiate(ctx, wasmCode)
 	if err != nil {
-		return fmt.Errorf("failed to instantiate the module: %s", err)
+		return err
 	}
 
-	defer module.Close(c.context)
-
-	c.module = module
-	exportedFunc := module.ExportedFunction("apply")
-
-	if exportedFunc == nil {
+	// All Leap contracts export the apply function as the main entrypoint
+	applyFunc := module.ExportedFunction("apply")
+	if applyFunc == nil {
 		return fmt.Errorf("failed to find apply function")
 	}
 
 	receiver := c.applyContext.GetReceiver()
 	code := c.applyContext.GetAction().Account
 	actionName := c.applyContext.GetAction().Name
-	_, resultErr := exportedFunc.Call(c.context, uint64(receiver), uint64(code), uint64(actionName))
 
-	if resultErr != nil {
+	// Run the apply function with the given data
+	if _, resultErr := applyFunc.Call(c.context, uint64(receiver), uint64(code), uint64(actionName)); resultErr != nil {
 		return fmt.Errorf("execution failed: %s", resultErr)
 	}
 
@@ -111,7 +94,7 @@ func (c *ExecutionContext) Exec(wasmCode []byte) error {
 
 // This function will read an array of bytes from the WASM memory, it panics on purpose when the read is out of range to kill the WASM execution environment
 func (c *ExecutionContext) ReadMemory(start uint32, length uint32) []byte {
-	if data, ok := c.module.Memory().Read(c.context, start, length); !ok {
+	if data, ok := c.module.Memory().Read(start, length); !ok {
 		panic("memory read out of range")
 	} else {
 		return data
@@ -120,13 +103,13 @@ func (c *ExecutionContext) ReadMemory(start uint32, length uint32) []byte {
 
 // This function will write an array of bytes to the WASM memory, it panics on purpose when the write is out of range to kill the WASM execution environment
 func (c *ExecutionContext) WriteMemory(start uint32, data []byte) {
-	if ok := c.module.Memory().Write(c.context, start, data); !ok {
+	if ok := c.module.Memory().Write(start, data); !ok {
 		panic("memory write out of range")
 	}
 }
 
 func (c *ExecutionContext) GetMemorySize() uint32 {
-	return c.module.Memory().Size(c.context)
+	return c.module.Memory().Size()
 }
 
 func (c *ExecutionContext) GetController() wasmApi.Controller {
