@@ -7,6 +7,13 @@ import (
 	"github.com/MetalBlockchain/antelopevm/crypto/rlp"
 )
 
+func init() {
+	Functions["send_inline"] = sendInline
+	Functions["send_context_free_inline"] = sendContextFreeInline
+	Functions["send_deferred"] = sendDeferred
+	Functions["cancel_deferred"] = cancelDeferred
+}
+
 func GetTransactionFunctions(context Context) map[string]interface{} {
 	functions := make(map[string]interface{})
 
@@ -18,7 +25,7 @@ func GetTransactionFunctions(context Context) map[string]interface{} {
 	return functions
 }
 
-func sendInline(context Context) func(uint32, uint32) {
+func sendInline(context Context) interface{} {
 	return func(ptr uint32, length uint32) {
 		if length >= uint32(config.MaxInlineActionSize) {
 			panic("inline action too big")
@@ -37,7 +44,7 @@ func sendInline(context Context) func(uint32, uint32) {
 	}
 }
 
-func sendContextFreeInline(context Context) func(uint32, uint32) {
+func sendContextFreeInline(context Context) interface{} {
 	return func(ptr uint32, length uint32) {
 		if length >= uint32(config.MaxInlineActionSize) {
 			panic("inline action too big")
@@ -56,13 +63,13 @@ func sendContextFreeInline(context Context) func(uint32, uint32) {
 	}
 }
 
-func sendDeferred(context Context) func(uint32, name.AccountName, uint32, uint32, uint32) {
+func sendDeferred(context Context) interface{} {
 	return func(ptrSender uint32, payer name.AccountName, ptrData, ptrLength, replaceExisting uint32) {
 		panic("not implemented")
 	}
 }
 
-func cancelDeferred(context Context) func(uint32) int32 {
+func cancelDeferred(context Context) interface{} {
 	return func(ptr uint32) int32 {
 		return 0
 	}

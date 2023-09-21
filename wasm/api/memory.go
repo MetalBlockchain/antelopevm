@@ -6,6 +6,13 @@ import (
 	"github.com/MetalBlockchain/antelopevm/utils"
 )
 
+func init() {
+	Functions["memset"] = MemSet
+	Functions["memcpy"] = MemCopy
+	Functions["memmove"] = MemMove
+	Functions["memcmp"] = MemCmp
+}
+
 func GetMemoryFunctions(context Context) map[string]interface{} {
 	functions := make(map[string]interface{})
 
@@ -17,7 +24,7 @@ func GetMemoryFunctions(context Context) map[string]interface{} {
 	return functions
 }
 
-func MemSet(context Context) func(uint32, int32, uint32) uint32 {
+func MemSet(context Context) interface{} {
 	return func(dest uint32, value int32, length uint32) uint32 {
 		destData := context.ReadMemory(dest, length)
 		memset(destData, byte(value), int(length))
@@ -25,7 +32,7 @@ func MemSet(context Context) func(uint32, int32, uint32) uint32 {
 	}
 }
 
-func MemCopy(context Context) func(uint32, uint32, uint32) uint32 {
+func MemCopy(context Context) interface{} {
 	return func(dest uint32, source uint32, length uint32) uint32 {
 		if utils.AbsInt32(int32(dest-source)) < int32(length) {
 			panic("memcpy can only accept non-aliasing pointers")
@@ -39,7 +46,7 @@ func MemCopy(context Context) func(uint32, uint32, uint32) uint32 {
 	}
 }
 
-func MemMove(context Context) func(uint32, uint32, uint32) uint32 {
+func MemMove(context Context) interface{} {
 	return func(dest uint32, source uint32, length uint32) uint32 {
 		sourceData := context.ReadMemory(source, length)
 		destData := context.ReadMemory(dest, length)
@@ -48,7 +55,7 @@ func MemMove(context Context) func(uint32, uint32, uint32) uint32 {
 	}
 }
 
-func MemCmp(context Context) func(uint32, uint32, uint32) int32 {
+func MemCmp(context Context) interface{} {
 	return func(dest uint32, source uint32, length uint32) int32 {
 		sourceData := context.ReadMemory(source, length)
 		destData := context.ReadMemory(dest, length)

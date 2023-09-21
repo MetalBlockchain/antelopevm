@@ -10,6 +10,20 @@ import (
 	antelopeMath "github.com/MetalBlockchain/antelopevm/math"
 )
 
+func init() {
+	Functions["prints"] = prints
+	Functions["prints_l"] = prints_l
+	Functions["printi"] = printi
+	Functions["printui"] = printui
+	Functions["printi128"] = printi128
+	Functions["printui128"] = printui128
+	Functions["printsf"] = printsf
+	Functions["printdf"] = printdf
+	Functions["printqf"] = printqf
+	Functions["printn"] = printn
+	Functions["printhex"] = printhex
+}
+
 func GetConsoleFunctions(context Context) map[string]interface{} {
 	functions := make(map[string]interface{})
 
@@ -28,7 +42,7 @@ func GetConsoleFunctions(context Context) map[string]interface{} {
 	return functions
 }
 
-func prints(context Context) func(uint32) {
+func prints(context Context) interface{} {
 	return func(ptr uint32) {
 		data := context.ReadMemory(ptr, 512)
 		var size uint32
@@ -46,7 +60,7 @@ func prints(context Context) func(uint32) {
 	}
 }
 
-func prints_l(context Context) func(uint32, uint32) {
+func prints_l(context Context) interface{} {
 	return func(ptr uint32, length uint32) {
 		data := context.ReadMemory(ptr, length)
 		text := string(data)
@@ -54,21 +68,21 @@ func prints_l(context Context) func(uint32, uint32) {
 	}
 }
 
-func printi(context Context) func(int64) {
+func printi(context Context) interface{} {
 	return func(value int64) {
 		text := strconv.FormatInt(value, 10)
 		context.GetApplyContext().ConsoleAppend(text)
 	}
 }
 
-func printui(context Context) func(uint64) {
+func printui(context Context) interface{} {
 	return func(value uint64) {
 		text := strconv.FormatUint(value, 10)
 		context.GetApplyContext().ConsoleAppend(text)
 	}
 }
 
-func printi128(context Context) func(uint32, uint32) {
+func printi128(context Context) interface{} {
 	return func(ptr uint32, length uint32) {
 		data := context.ReadMemory(ptr, length)
 		var value antelopeMath.Int128
@@ -81,7 +95,7 @@ func printi128(context Context) func(uint32, uint32) {
 	}
 }
 
-func printui128(context Context) func(uint32, uint32) {
+func printui128(context Context) interface{} {
 	return func(ptr uint32, length uint32) {
 		data := context.ReadMemory(ptr, length)
 		var value antelopeMath.Uint128
@@ -94,7 +108,7 @@ func printui128(context Context) func(uint32, uint32) {
 	}
 }
 
-func printsf(context Context) func(uint32) {
+func printsf(context Context) interface{} {
 	return func(value uint32) {
 		val := math.Float32frombits(value)
 		text := strconv.FormatFloat(float64(val), 'e', 6, 32)
@@ -102,7 +116,7 @@ func printsf(context Context) func(uint32) {
 	}
 }
 
-func printdf(context Context) func(uint64) {
+func printdf(context Context) interface{} {
 	return func(value uint64) {
 		val := math.Float64frombits(value)
 		text := strconv.FormatFloat(val, 'e', 15, 64)
@@ -110,7 +124,7 @@ func printdf(context Context) func(uint64) {
 	}
 }
 
-func printqf(context Context) func(uint32, uint32) {
+func printqf(context Context) interface{} {
 	return func(ptr uint32, length uint32) {
 		data := context.ReadMemory(ptr, length)
 		var value antelopeMath.Float128
@@ -123,13 +137,13 @@ func printqf(context Context) func(uint32, uint32) {
 	}
 }
 
-func printn(context Context) func(name.Name) {
+func printn(context Context) interface{} {
 	return func(value name.Name) {
 		context.GetApplyContext().ConsoleAppend(value.String())
 	}
 }
 
-func printhex(context Context) func(uint32, uint32) {
+func printhex(context Context) interface{} {
 	return func(ptr uint32, length uint32) {
 		data := context.ReadMemory(ptr, length)
 		text := hex.EncodeToString(data)

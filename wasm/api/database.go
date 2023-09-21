@@ -7,6 +7,92 @@ import (
 	"github.com/MetalBlockchain/antelopevm/utils"
 )
 
+func init() {
+	/**
+	 * interface for primary index
+	 */
+	Functions["db_store_i64"] = storeI64
+	Functions["db_update_i64"] = updateI64
+	Functions["db_remove_i64"] = removeI64
+	Functions["db_get_i64"] = getI64
+	Functions["db_next_i64"] = nextI64
+	Functions["db_previous_i64"] = previousI64
+	Functions["db_find_i64"] = findI64
+	Functions["db_lowerbound_i64"] = lowerboundI64
+	Functions["db_upperbound_i64"] = upperboundI64
+	Functions["db_end_i64"] = endI64
+
+	/**
+	 * interface for uint64_t secondary
+	 */
+	Functions["db_idx64_store"] = storeIdx64
+	Functions["db_idx64_update"] = updateIdx64
+	Functions["db_idx64_remove"] = removeIdx64
+	Functions["db_idx64_find_secondary"] = findIdx64Secondary
+	Functions["db_idx64_find_primary"] = findIdx64Primary
+	Functions["db_idx64_lowerbound"] = lowerboundIdx64
+	Functions["db_idx64_upperbound"] = upperboundIdx64
+	Functions["db_idx64_end"] = endIdx64
+	Functions["db_idx64_next"] = nextIdx64
+	Functions["db_idx64_previous"] = previousIdx64
+
+	/**
+	 * interface for uint128_t secondary
+	 */
+	Functions["db_idx128_store"] = storeIdx128
+	Functions["db_idx128_update"] = updateIdx128
+	Functions["db_idx128_remove"] = removeIdx128
+	Functions["db_idx128_find_secondary"] = findIdx128Secondary
+	Functions["db_idx128_find_primary"] = findIdx128Primary
+	Functions["db_idx128_lowerbound"] = lowerboundIdx128
+	Functions["db_idx128_upperbound"] = upperboundIdx128
+	Functions["db_idx128_end"] = endIdx128
+	Functions["db_idx128_next"] = nextIdx128
+	Functions["db_idx128_previous"] = previousIdx128
+
+	/**
+	 * interface for 256-bit interger secondary
+	 */
+	Functions["db_idx256_store"] = storeIdx256
+	Functions["db_idx256_update"] = updateIdx256
+	Functions["db_idx256_remove"] = removeIdx256
+	Functions["db_idx256_find_secondary"] = findIdx256Secondary
+	Functions["db_idx256_find_primary"] = findIdx256Primary
+	Functions["db_idx256_lowerbound"] = lowerboundIdx256
+	Functions["db_idx256_upperbound"] = upperboundIdx256
+	Functions["db_idx256_end"] = endIdx256
+	Functions["db_idx256_next"] = nextIdx256
+	Functions["db_idx256_previous"] = previousIdx256
+
+	/**
+	 * interface for double secondary
+	 */
+	Functions["db_idx_double_store"] = storeIdxDouble
+	Functions["db_idx_double_update"] = updateIdxDouble
+	Functions["db_idx_double_remove"] = removeIdxDouble
+	Functions["db_idx_double_find_secondary"] = findIdxDoubleSecondary
+	Functions["db_idx_double_find_primary"] = findIdxDoublePrimary
+	Functions["db_idx_double_lowerbound"] = lowerboundIdxDouble
+	Functions["db_idx_double_upperbound"] = upperboundIdxDouble
+	Functions["db_idx_double_end"] = endIdxDouble
+	Functions["db_idx_double_next"] = nextIdxDouble
+	Functions["db_idx_double_previous"] = previousIdxDouble
+
+	/**
+	 * interface for long double secondary
+	 */
+	Functions["db_idx_long_double_store"] = storeIdx64
+	Functions["db_idx_long_double_update"] = updateIdx64
+	Functions["db_idx_long_double_remove"] = removeIdx64
+	Functions["db_idx_long_double_find_secondary"] = findIdx64Secondary
+	Functions["db_idx_long_double_find_primary"] = findIdx64Primary
+	Functions["db_idx_long_double_lowerbound"] = lowerboundIdx64
+	Functions["db_idx_long_double_upperbound"] = upperboundIdx64
+	Functions["db_idx_long_double_end"] = endIdx64
+	Functions["db_idx_long_double_next"] = nextIdx64
+	Functions["db_idx_long_double_previous"] = previousIdx64
+}
+
 func GetDatabaseFunctions(context Context) map[string]interface{} {
 	functions := make(map[string]interface{})
 
@@ -97,7 +183,7 @@ func GetDatabaseFunctions(context Context) map[string]interface{} {
 	return functions
 }
 
-func storeI64(context Context) func(name.ScopeName, name.TableName, name.AccountName, uint64, uint32, uint32) int32 {
+func storeI64(context Context) interface{} {
 	return func(scope name.ScopeName, table name.TableName, payer name.AccountName, id uint64, buffer uint32, bufferSize uint32) int32 {
 		data := context.ReadMemory(buffer, bufferSize)
 		code := context.GetApplyContext().GetReceiver()
@@ -111,7 +197,7 @@ func storeI64(context Context) func(name.ScopeName, name.TableName, name.Account
 	}
 }
 
-func updateI64(context Context) func(uint32, name.AccountName, uint32, uint32) {
+func updateI64(context Context) interface{} {
 	return func(iterator uint32, payer name.AccountName, buffer uint32, bufferSize uint32) {
 		data := context.ReadMemory(buffer, bufferSize)
 
@@ -121,7 +207,7 @@ func updateI64(context Context) func(uint32, name.AccountName, uint32, uint32) {
 	}
 }
 
-func removeI64(context Context) func(int32) {
+func removeI64(context Context) interface{} {
 	return func(iterator int32) {
 		if err := context.GetApplyContext().RemoveI64(int(iterator)); err != nil {
 			panic("failed to remove i64")
@@ -129,7 +215,7 @@ func removeI64(context Context) func(int32) {
 	}
 }
 
-func getI64(context Context) func(int32, uint32, uint32) int32 {
+func getI64(context Context) interface{} {
 	return func(iterator int32, buffer uint32, bufferSize uint32) int32 {
 		bytes := make([]byte, bufferSize)
 		size, err := context.GetApplyContext().GetI64(int(iterator), bytes, int(bufferSize))
@@ -146,7 +232,7 @@ func getI64(context Context) func(int32, uint32, uint32) int32 {
 	}
 }
 
-func nextI64(context Context) func(int32, uint32) int32 {
+func nextI64(context Context) interface{} {
 	return func(iterator int32, ptr uint32) int32 {
 		var primaryKey uint64
 
@@ -160,7 +246,7 @@ func nextI64(context Context) func(int32, uint32) int32 {
 	}
 }
 
-func previousI64(context Context) func(int32, uint32) int32 {
+func previousI64(context Context) interface{} {
 	return func(iterator int32, ptr uint32) int32 {
 		var primaryKey uint64
 
@@ -174,7 +260,7 @@ func previousI64(context Context) func(int32, uint32) int32 {
 	}
 }
 
-func findI64(context Context) func(name.Name, name.ScopeName, name.TableName, uint64) int32 {
+func findI64(context Context) interface{} {
 	return func(code name.Name, scope name.ScopeName, table name.TableName, id uint64) int32 {
 		iterator := context.GetApplyContext().FindI64(code, scope, table, id)
 
@@ -182,7 +268,7 @@ func findI64(context Context) func(name.Name, name.ScopeName, name.TableName, ui
 	}
 }
 
-func lowerboundI64(context Context) func(name.AccountName, name.ScopeName, name.TableName, uint64) int32 {
+func lowerboundI64(context Context) interface{} {
 	return func(code name.AccountName, scope name.ScopeName, table name.TableName, id uint64) int32 {
 		if res, err := context.GetApplyContext().LowerboundI64(code, scope, table, id); err == nil {
 			return int32(res)
@@ -192,7 +278,7 @@ func lowerboundI64(context Context) func(name.AccountName, name.ScopeName, name.
 	}
 }
 
-func upperboundI64(context Context) func(name.AccountName, name.ScopeName, name.TableName, uint64) int32 {
+func upperboundI64(context Context) interface{} {
 	return func(code name.AccountName, scope name.ScopeName, table name.TableName, id uint64) int32 {
 		if res, err := context.GetApplyContext().UpperboundI64(code, scope, table, id); err == nil {
 			return int32(res)
@@ -202,7 +288,7 @@ func upperboundI64(context Context) func(name.AccountName, name.ScopeName, name.
 	}
 }
 
-func endI64(context Context) func(name.AccountName, name.ScopeName, name.TableName) int32 {
+func endI64(context Context) interface{} {
 	return func(code name.AccountName, scope name.ScopeName, table name.TableName) int32 {
 		res, err := context.GetApplyContext().EndI64(code, scope, table)
 
@@ -215,7 +301,7 @@ func endI64(context Context) func(name.AccountName, name.ScopeName, name.TableNa
 }
 
 // Idx64
-func storeIdx64(context Context) func(name.ScopeName, name.TableName, name.AccountName, uint64, uint32) int32 {
+func storeIdx64(context Context) interface{} {
 	return func(scope name.ScopeName, table name.TableName, payer name.AccountName, id uint64, ptr uint32) int32 {
 		secondaryKey := readUint64(context, ptr)
 
@@ -227,7 +313,7 @@ func storeIdx64(context Context) func(name.ScopeName, name.TableName, name.Accou
 	}
 }
 
-func updateIdx64(context Context) func(int32, name.AccountName, uint32) {
+func updateIdx64(context Context) interface{} {
 	return func(iterator int32, payer name.AccountName, ptr uint32) {
 		secondaryKey := readUint64(context, ptr)
 
@@ -237,7 +323,7 @@ func updateIdx64(context Context) func(int32, name.AccountName, uint32) {
 	}
 }
 
-func removeIdx64(context Context) func(int32) {
+func removeIdx64(context Context) interface{} {
 	return func(iterator int32) {
 		if err := context.GetIdx64().Remove(int(iterator)); err != nil {
 			panic(err)
@@ -245,7 +331,7 @@ func removeIdx64(context Context) func(int32) {
 	}
 }
 
-func findIdx64Secondary(context Context) func(name.AccountName, name.ScopeName, name.TableName, uint32, uint32) int32 {
+func findIdx64Secondary(context Context) interface{} {
 	return func(code name.AccountName, scope name.ScopeName, table name.TableName, ptrSecondary, ptrPrimary uint32) int32 {
 		var primaryKey uint64
 		secondaryKey := readUint64(context, ptrSecondary)
@@ -261,7 +347,7 @@ func findIdx64Secondary(context Context) func(name.AccountName, name.ScopeName, 
 	}
 }
 
-func findIdx64Primary(context Context) func(name.AccountName, name.ScopeName, name.TableName, uint32, uint64) int32 {
+func findIdx64Primary(context Context) interface{} {
 	return func(code name.AccountName, scope name.ScopeName, table name.TableName, ptrSecondary uint32, primary uint64) int32 {
 		var secondaryKey uint64
 		iterator := context.GetIdx64().FindPrimary(code, scope, table, &secondaryKey, primary)
@@ -276,7 +362,7 @@ func findIdx64Primary(context Context) func(name.AccountName, name.ScopeName, na
 	}
 }
 
-func lowerboundIdx64(context Context) func(name.AccountName, name.ScopeName, name.TableName, uint32, uint32) int32 {
+func lowerboundIdx64(context Context) interface{} {
 	return func(code name.AccountName, scope name.ScopeName, table name.TableName, ptrSecondary, ptrPrimary uint32) int32 {
 		var primaryKey uint64
 		secondaryKey := readUint64(context, ptrSecondary)
@@ -293,7 +379,7 @@ func lowerboundIdx64(context Context) func(name.AccountName, name.ScopeName, nam
 	}
 }
 
-func upperboundIdx64(context Context) func(name.AccountName, name.ScopeName, name.TableName, uint32, uint32) int32 {
+func upperboundIdx64(context Context) interface{} {
 	return func(code name.AccountName, scope name.ScopeName, table name.TableName, ptrSecondary, ptrPrimary uint32) int32 {
 		var primaryKey uint64
 		secondaryKey := readUint64(context, ptrSecondary)
@@ -310,7 +396,7 @@ func upperboundIdx64(context Context) func(name.AccountName, name.ScopeName, nam
 	}
 }
 
-func endIdx64(context Context) func(name.AccountName, name.ScopeName, name.TableName) int32 {
+func endIdx64(context Context) interface{} {
 	return func(code, scope, table name.Name) int32 {
 		iterator := context.GetIdx64().EndSecondary(code, scope, table)
 
@@ -318,7 +404,7 @@ func endIdx64(context Context) func(name.AccountName, name.ScopeName, name.Table
 	}
 }
 
-func nextIdx64(context Context) func(int32, uint32) int32 {
+func nextIdx64(context Context) interface{} {
 	return func(itr int32, ptrPrimary uint32) int32 {
 		var primaryKey uint64
 		iterator, err := context.GetIdx64().NextSecondary(int(itr), &primaryKey)
@@ -337,7 +423,7 @@ func nextIdx64(context Context) func(int32, uint32) int32 {
 	}
 }
 
-func previousIdx64(context Context) func(int32, uint32) int32 {
+func previousIdx64(context Context) interface{} {
 	return func(itr int32, ptrPrimary uint32) int32 {
 		var primaryKey uint64
 		iterator, err := context.GetIdx64().PreviousSecondary(int(itr), &primaryKey)
@@ -357,7 +443,7 @@ func previousIdx64(context Context) func(int32, uint32) int32 {
 }
 
 // Idx128
-func storeIdx128(context Context) func(name.ScopeName, name.TableName, name.AccountName, uint64, uint32) int32 {
+func storeIdx128(context Context) interface{} {
 	return func(scope name.ScopeName, table name.TableName, payer name.AccountName, id uint64, ptr uint32) int32 {
 		secondaryKey := readUint128(context, ptr)
 
@@ -369,7 +455,7 @@ func storeIdx128(context Context) func(name.ScopeName, name.TableName, name.Acco
 	}
 }
 
-func updateIdx128(context Context) func(int32, name.AccountName, uint32) {
+func updateIdx128(context Context) interface{} {
 	return func(iterator int32, payer name.AccountName, ptr uint32) {
 		secondaryKey := readUint128(context, ptr)
 
@@ -379,7 +465,7 @@ func updateIdx128(context Context) func(int32, name.AccountName, uint32) {
 	}
 }
 
-func removeIdx128(context Context) func(int32) {
+func removeIdx128(context Context) interface{} {
 	return func(iterator int32) {
 		if err := context.GetIdx128().Remove(int(iterator)); err != nil {
 			panic(err)
@@ -387,7 +473,7 @@ func removeIdx128(context Context) func(int32) {
 	}
 }
 
-func findIdx128Secondary(context Context) func(name.AccountName, name.ScopeName, name.TableName, uint32, uint32) int32 {
+func findIdx128Secondary(context Context) interface{} {
 	return func(code name.AccountName, scope name.ScopeName, table name.TableName, ptrSecondary, ptrPrimary uint32) int32 {
 		var primaryKey uint64
 		secondaryKey := readUint128(context, ptrSecondary)
@@ -403,7 +489,7 @@ func findIdx128Secondary(context Context) func(name.AccountName, name.ScopeName,
 	}
 }
 
-func findIdx128Primary(context Context) func(name.AccountName, name.ScopeName, name.TableName, uint32, uint64) int32 {
+func findIdx128Primary(context Context) interface{} {
 	return func(code name.AccountName, scope name.ScopeName, table name.TableName, ptrSecondary uint32, primary uint64) int32 {
 		var secondaryKey math.Uint128
 		iterator := context.GetIdx128().FindPrimary(code, scope, table, &secondaryKey, primary)
@@ -418,7 +504,7 @@ func findIdx128Primary(context Context) func(name.AccountName, name.ScopeName, n
 	}
 }
 
-func lowerboundIdx128(context Context) func(name.AccountName, name.ScopeName, name.TableName, uint32, uint32) int32 {
+func lowerboundIdx128(context Context) interface{} {
 	return func(code name.AccountName, scope name.ScopeName, table name.TableName, ptrSecondary, ptrPrimary uint32) int32 {
 		var primaryKey uint64
 		secondaryKey := readUint128(context, ptrSecondary)
@@ -435,7 +521,7 @@ func lowerboundIdx128(context Context) func(name.AccountName, name.ScopeName, na
 	}
 }
 
-func upperboundIdx128(context Context) func(name.AccountName, name.ScopeName, name.TableName, uint32, uint32) int32 {
+func upperboundIdx128(context Context) interface{} {
 	return func(code name.AccountName, scope name.ScopeName, table name.TableName, ptrSecondary, ptrPrimary uint32) int32 {
 		var primaryKey uint64
 		secondaryKey := readUint128(context, ptrSecondary)
@@ -452,7 +538,7 @@ func upperboundIdx128(context Context) func(name.AccountName, name.ScopeName, na
 	}
 }
 
-func endIdx128(context Context) func(name.AccountName, name.ScopeName, name.TableName) int32 {
+func endIdx128(context Context) interface{} {
 	return func(code, scope, table name.Name) int32 {
 		iterator := context.GetIdx128().EndSecondary(code, scope, table)
 
@@ -460,7 +546,7 @@ func endIdx128(context Context) func(name.AccountName, name.ScopeName, name.Tabl
 	}
 }
 
-func nextIdx128(context Context) func(int32, uint32) int32 {
+func nextIdx128(context Context) interface{} {
 	return func(itr int32, ptrPrimary uint32) int32 {
 		var primaryKey uint64
 		iterator, err := context.GetIdx128().NextSecondary(int(itr), &primaryKey)
@@ -479,7 +565,7 @@ func nextIdx128(context Context) func(int32, uint32) int32 {
 	}
 }
 
-func previousIdx128(context Context) func(int32, uint32) int32 {
+func previousIdx128(context Context) interface{} {
 	return func(itr int32, ptrPrimary uint32) int32 {
 		var primaryKey uint64
 		iterator, err := context.GetIdx128().PreviousSecondary(int(itr), &primaryKey)
@@ -499,7 +585,7 @@ func previousIdx128(context Context) func(int32, uint32) int32 {
 }
 
 // Idx256
-func storeIdx256(context Context) func(name.ScopeName, name.TableName, name.AccountName, uint64, uint32) int32 {
+func storeIdx256(context Context) interface{} {
 	return func(scope name.ScopeName, table name.TableName, payer name.AccountName, id uint64, ptr uint32) int32 {
 		secondaryKey := readUint256(context, ptr)
 
@@ -511,7 +597,7 @@ func storeIdx256(context Context) func(name.ScopeName, name.TableName, name.Acco
 	}
 }
 
-func updateIdx256(context Context) func(int32, name.AccountName, uint32) {
+func updateIdx256(context Context) interface{} {
 	return func(iterator int32, payer name.AccountName, ptr uint32) {
 		secondaryKey := readUint256(context, ptr)
 
@@ -521,7 +607,7 @@ func updateIdx256(context Context) func(int32, name.AccountName, uint32) {
 	}
 }
 
-func removeIdx256(context Context) func(int32) {
+func removeIdx256(context Context) interface{} {
 	return func(iterator int32) {
 		if err := context.GetIdx256().Remove(int(iterator)); err != nil {
 			panic(err)
@@ -529,7 +615,7 @@ func removeIdx256(context Context) func(int32) {
 	}
 }
 
-func findIdx256Secondary(context Context) func(name.AccountName, name.ScopeName, name.TableName, uint32, uint32) int32 {
+func findIdx256Secondary(context Context) interface{} {
 	return func(code name.AccountName, scope name.ScopeName, table name.TableName, ptrSecondary, ptrPrimary uint32) int32 {
 		var primaryKey uint64
 		secondaryKey := readUint256(context, ptrSecondary)
@@ -545,7 +631,7 @@ func findIdx256Secondary(context Context) func(name.AccountName, name.ScopeName,
 	}
 }
 
-func findIdx256Primary(context Context) func(name.AccountName, name.ScopeName, name.TableName, uint32, uint64) int32 {
+func findIdx256Primary(context Context) interface{} {
 	return func(code name.AccountName, scope name.ScopeName, table name.TableName, ptrSecondary uint32, primary uint64) int32 {
 		var secondaryKey math.Uint256
 		iterator := context.GetIdx256().FindPrimary(code, scope, table, &secondaryKey, primary)
@@ -560,7 +646,7 @@ func findIdx256Primary(context Context) func(name.AccountName, name.ScopeName, n
 	}
 }
 
-func lowerboundIdx256(context Context) func(name.AccountName, name.ScopeName, name.TableName, uint32, uint32) int32 {
+func lowerboundIdx256(context Context) interface{} {
 	return func(code name.AccountName, scope name.ScopeName, table name.TableName, ptrSecondary, ptrPrimary uint32) int32 {
 		var primaryKey uint64
 		secondaryKey := readUint256(context, ptrSecondary)
@@ -577,7 +663,7 @@ func lowerboundIdx256(context Context) func(name.AccountName, name.ScopeName, na
 	}
 }
 
-func upperboundIdx256(context Context) func(name.AccountName, name.ScopeName, name.TableName, uint32, uint32) int32 {
+func upperboundIdx256(context Context) interface{} {
 	return func(code name.AccountName, scope name.ScopeName, table name.TableName, ptrSecondary, ptrPrimary uint32) int32 {
 		var primaryKey uint64
 		secondaryKey := readUint256(context, ptrSecondary)
@@ -594,7 +680,7 @@ func upperboundIdx256(context Context) func(name.AccountName, name.ScopeName, na
 	}
 }
 
-func endIdx256(context Context) func(name.AccountName, name.ScopeName, name.TableName) int32 {
+func endIdx256(context Context) interface{} {
 	return func(code, scope, table name.Name) int32 {
 		iterator := context.GetIdx256().EndSecondary(code, scope, table)
 
@@ -602,7 +688,7 @@ func endIdx256(context Context) func(name.AccountName, name.ScopeName, name.Tabl
 	}
 }
 
-func nextIdx256(context Context) func(int32, uint32) int32 {
+func nextIdx256(context Context) interface{} {
 	return func(itr int32, ptrPrimary uint32) int32 {
 		var primaryKey uint64
 		iterator, err := context.GetIdx256().NextSecondary(int(itr), &primaryKey)
@@ -621,7 +707,7 @@ func nextIdx256(context Context) func(int32, uint32) int32 {
 	}
 }
 
-func previousIdx256(context Context) func(int32, uint32) int32 {
+func previousIdx256(context Context) interface{} {
 	return func(itr int32, ptrPrimary uint32) int32 {
 		var primaryKey uint64
 		iterator, err := context.GetIdx256().PreviousSecondary(int(itr), &primaryKey)
@@ -641,7 +727,7 @@ func previousIdx256(context Context) func(int32, uint32) int32 {
 }
 
 // IdxDouble
-func storeIdxDouble(context Context) func(name.ScopeName, name.TableName, name.AccountName, uint64, uint32) int32 {
+func storeIdxDouble(context Context) interface{} {
 	return func(scope name.ScopeName, table name.TableName, payer name.AccountName, id uint64, ptr uint32) int32 {
 		secondaryKey := readFloat64(context, ptr)
 
@@ -653,7 +739,7 @@ func storeIdxDouble(context Context) func(name.ScopeName, name.TableName, name.A
 	}
 }
 
-func updateIdxDouble(context Context) func(int32, name.AccountName, uint32) {
+func updateIdxDouble(context Context) interface{} {
 	return func(iterator int32, payer name.AccountName, ptr uint32) {
 		secondaryKey := readFloat64(context, ptr)
 
@@ -663,7 +749,7 @@ func updateIdxDouble(context Context) func(int32, name.AccountName, uint32) {
 	}
 }
 
-func removeIdxDouble(context Context) func(int32) {
+func removeIdxDouble(context Context) interface{} {
 	return func(iterator int32) {
 		if err := context.GetIdxDouble().Remove(int(iterator)); err != nil {
 			panic(err)
@@ -671,7 +757,7 @@ func removeIdxDouble(context Context) func(int32) {
 	}
 }
 
-func findIdxDoubleSecondary(context Context) func(name.AccountName, name.ScopeName, name.TableName, uint32, uint32) int32 {
+func findIdxDoubleSecondary(context Context) interface{} {
 	return func(code name.AccountName, scope name.ScopeName, table name.TableName, ptrSecondary, ptrPrimary uint32) int32 {
 		var primaryKey uint64
 		secondaryKey := readFloat64(context, ptrSecondary)
@@ -687,7 +773,7 @@ func findIdxDoubleSecondary(context Context) func(name.AccountName, name.ScopeNa
 	}
 }
 
-func findIdxDoublePrimary(context Context) func(name.AccountName, name.ScopeName, name.TableName, uint32, uint64) int32 {
+func findIdxDoublePrimary(context Context) interface{} {
 	return func(code name.AccountName, scope name.ScopeName, table name.TableName, ptrSecondary uint32, primary uint64) int32 {
 		var secondaryKey float64
 		iterator := context.GetIdxDouble().FindPrimary(code, scope, table, &secondaryKey, primary)
@@ -702,7 +788,7 @@ func findIdxDoublePrimary(context Context) func(name.AccountName, name.ScopeName
 	}
 }
 
-func lowerboundIdxDouble(context Context) func(name.AccountName, name.ScopeName, name.TableName, uint32, uint32) int32 {
+func lowerboundIdxDouble(context Context) interface{} {
 	return func(code name.AccountName, scope name.ScopeName, table name.TableName, ptrSecondary, ptrPrimary uint32) int32 {
 		var primaryKey uint64
 		secondaryKey := readFloat64(context, ptrSecondary)
@@ -719,7 +805,7 @@ func lowerboundIdxDouble(context Context) func(name.AccountName, name.ScopeName,
 	}
 }
 
-func upperboundIdxDouble(context Context) func(name.AccountName, name.ScopeName, name.TableName, uint32, uint32) int32 {
+func upperboundIdxDouble(context Context) interface{} {
 	return func(code name.AccountName, scope name.ScopeName, table name.TableName, ptrSecondary, ptrPrimary uint32) int32 {
 		var primaryKey uint64
 		secondaryKey := readFloat64(context, ptrSecondary)
@@ -736,7 +822,7 @@ func upperboundIdxDouble(context Context) func(name.AccountName, name.ScopeName,
 	}
 }
 
-func endIdxDouble(context Context) func(name.AccountName, name.ScopeName, name.TableName) int32 {
+func endIdxDouble(context Context) interface{} {
 	return func(code, scope, table name.Name) int32 {
 		iterator := context.GetIdxDouble().EndSecondary(code, scope, table)
 
@@ -744,7 +830,7 @@ func endIdxDouble(context Context) func(name.AccountName, name.ScopeName, name.T
 	}
 }
 
-func nextIdxDouble(context Context) func(int32, uint32) int32 {
+func nextIdxDouble(context Context) interface{} {
 	return func(itr int32, ptrPrimary uint32) int32 {
 		var primaryKey uint64
 		iterator, err := context.GetIdxDouble().NextSecondary(int(itr), &primaryKey)
@@ -763,7 +849,7 @@ func nextIdxDouble(context Context) func(int32, uint32) int32 {
 	}
 }
 
-func previousIdxDouble(context Context) func(int32, uint32) int32 {
+func previousIdxDouble(context Context) interface{} {
 	return func(itr int32, ptrPrimary uint32) int32 {
 		var primaryKey uint64
 		iterator, err := context.GetIdxDouble().PreviousSecondary(int(itr), &primaryKey)
@@ -783,7 +869,7 @@ func previousIdxDouble(context Context) func(int32, uint32) int32 {
 }
 
 // IdxLongDouble
-func storeIdxLongDouble(context Context) func(name.ScopeName, name.TableName, name.AccountName, uint64, uint32) int32 {
+func storeIdxLongDouble(context Context) interface{} {
 	return func(scope name.ScopeName, table name.TableName, payer name.AccountName, id uint64, ptr uint32) int32 {
 		secondaryKey := readFloat128(context, ptr)
 
@@ -795,7 +881,7 @@ func storeIdxLongDouble(context Context) func(name.ScopeName, name.TableName, na
 	}
 }
 
-func updateIdxLongDouble(context Context) func(int32, name.AccountName, uint32) {
+func updateIdxLongDouble(context Context) interface{} {
 	return func(iterator int32, payer name.AccountName, ptr uint32) {
 		secondaryKey := readFloat128(context, ptr)
 
@@ -805,7 +891,7 @@ func updateIdxLongDouble(context Context) func(int32, name.AccountName, uint32) 
 	}
 }
 
-func removeIdxLongDouble(context Context) func(int32) {
+func removeIdxLongDouble(context Context) interface{} {
 	return func(iterator int32) {
 		if err := context.GetIdxLongDouble().Remove(int(iterator)); err != nil {
 			panic(err)
@@ -813,7 +899,7 @@ func removeIdxLongDouble(context Context) func(int32) {
 	}
 }
 
-func findIdxLongDoubleSecondary(context Context) func(name.AccountName, name.ScopeName, name.TableName, uint32, uint32) int32 {
+func findIdxLongDoubleSecondary(context Context) interface{} {
 	return func(code name.AccountName, scope name.ScopeName, table name.TableName, ptrSecondary, ptrPrimary uint32) int32 {
 		var primaryKey uint64
 		secondaryKey := readFloat128(context, ptrSecondary)
@@ -829,7 +915,7 @@ func findIdxLongDoubleSecondary(context Context) func(name.AccountName, name.Sco
 	}
 }
 
-func findIdxLongDoublePrimary(context Context) func(name.AccountName, name.ScopeName, name.TableName, uint32, uint64) int32 {
+func findIdxLongDoublePrimary(context Context) interface{} {
 	return func(code name.AccountName, scope name.ScopeName, table name.TableName, ptrSecondary uint32, primary uint64) int32 {
 		var secondaryKey math.Float128
 		iterator := context.GetIdxLongDouble().FindPrimary(code, scope, table, &secondaryKey, primary)
@@ -844,7 +930,7 @@ func findIdxLongDoublePrimary(context Context) func(name.AccountName, name.Scope
 	}
 }
 
-func lowerboundIdxLongDouble(context Context) func(name.AccountName, name.ScopeName, name.TableName, uint32, uint32) int32 {
+func lowerboundIdxLongDouble(context Context) interface{} {
 	return func(code name.AccountName, scope name.ScopeName, table name.TableName, ptrSecondary, ptrPrimary uint32) int32 {
 		var primaryKey uint64
 		secondaryKey := readFloat128(context, ptrSecondary)
@@ -861,7 +947,7 @@ func lowerboundIdxLongDouble(context Context) func(name.AccountName, name.ScopeN
 	}
 }
 
-func upperboundIdxLongDouble(context Context) func(name.AccountName, name.ScopeName, name.TableName, uint32, uint32) int32 {
+func upperboundIdxLongDouble(context Context) interface{} {
 	return func(code name.AccountName, scope name.ScopeName, table name.TableName, ptrSecondary, ptrPrimary uint32) int32 {
 		var primaryKey uint64
 		secondaryKey := readFloat128(context, ptrSecondary)
@@ -878,7 +964,7 @@ func upperboundIdxLongDouble(context Context) func(name.AccountName, name.ScopeN
 	}
 }
 
-func endIdxLongDouble(context Context) func(name.AccountName, name.ScopeName, name.TableName) int32 {
+func endIdxLongDouble(context Context) interface{} {
 	return func(code, scope, table name.Name) int32 {
 		iterator := context.GetIdxLongDouble().EndSecondary(code, scope, table)
 
@@ -886,7 +972,7 @@ func endIdxLongDouble(context Context) func(name.AccountName, name.ScopeName, na
 	}
 }
 
-func nextIdxLongDouble(context Context) func(int32, uint32) int32 {
+func nextIdxLongDouble(context Context) interface{} {
 	return func(itr int32, ptrPrimary uint32) int32 {
 		var primaryKey uint64
 		iterator, err := context.GetIdxLongDouble().NextSecondary(int(itr), &primaryKey)
@@ -905,7 +991,7 @@ func nextIdxLongDouble(context Context) func(int32, uint32) int32 {
 	}
 }
 
-func previousIdxLongDouble(context Context) func(int32, uint32) int32 {
+func previousIdxLongDouble(context Context) interface{} {
 	return func(itr int32, ptrPrimary uint32) int32 {
 		var primaryKey uint64
 		iterator, err := context.GetIdxLongDouble().PreviousSecondary(int(itr), &primaryKey)

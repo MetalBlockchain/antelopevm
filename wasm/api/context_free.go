@@ -4,6 +4,10 @@ import (
 	"github.com/MetalBlockchain/antelopevm/utils"
 )
 
+func init() {
+	Functions["get_context_free_data"] = getContextFreeData
+}
+
 func GetContextFreeFunctions(context Context) map[string]interface{} {
 	functions := make(map[string]interface{})
 
@@ -12,7 +16,7 @@ func GetContextFreeFunctions(context Context) map[string]interface{} {
 	return functions
 }
 
-func getContextFreeData(context Context) func(uint32, uint32, uint32) int32 {
+func getContextFreeData(context Context) interface{} {
 	return func(index uint32, ptr uint32, length uint32) int32 {
 		trx, err := context.GetApplyContext().GetPackedTransaction().GetSignedTransaction()
 

@@ -9,6 +9,13 @@ import (
 	"github.com/hashicorp/go-set"
 )
 
+func init() {
+	Functions["check_transaction_authorization"] = checkTransactionAuthorization
+	Functions["check_permission_authorization"] = checkPermissionAuthorization
+	Functions["get_permission_last_used"] = getPermissionLastUsed
+	Functions["get_account_creation_time"] = getAccountCreationTime
+}
+
 func GetPermissionFunctions(context Context) map[string]interface{} {
 	functions := make(map[string]interface{})
 
@@ -20,7 +27,7 @@ func GetPermissionFunctions(context Context) map[string]interface{} {
 	return functions
 }
 
-func checkTransactionAuthorization(context Context) func(uint32, uint32, uint32, uint32, uint32, uint32) int32 {
+func checkTransactionAuthorization(context Context) interface{} {
 	return func(trxPtr uint32, trxSize uint32, pubKeys uint32, pubKeysSize uint32, perms uint32, permsSize uint32) int32 {
 		trxDataBytes := context.ReadMemory(trxPtr, trxSize)
 		pubKeysBytes := context.ReadMemory(pubKeys, pubKeysSize)
@@ -46,7 +53,7 @@ func checkTransactionAuthorization(context Context) func(uint32, uint32, uint32,
 	}
 }
 
-func checkPermissionAuthorization(context Context) func(name.AccountName, name.PermissionName, uint32, uint32, uint32, uint32, uint64) int32 {
+func checkPermissionAuthorization(context Context) interface{} {
 	return func(account name.AccountName, permission name.PermissionName, pubKeys, pubKeysSize, perms, permsSize uint32, delay uint64) int32 {
 		pubKeysBytes := context.ReadMemory(pubKeys, pubKeysSize)
 		permsBytes := context.ReadMemory(perms, permsSize)
@@ -65,7 +72,7 @@ func checkPermissionAuthorization(context Context) func(name.AccountName, name.P
 	}
 }
 
-func getPermissionLastUsed(context Context) func(name.AccountName, name.PermissionName) int64 {
+func getPermissionLastUsed(context Context) interface{} {
 	return func(account name.AccountName, permissionName name.PermissionName) int64 {
 		permission, err := context.GetAuthorizationManager().GetPermission(authority.PermissionLevel{Actor: account, Permission: permissionName})
 
@@ -77,7 +84,7 @@ func getPermissionLastUsed(context Context) func(name.AccountName, name.Permissi
 	}
 }
 
-func getAccountCreationTime(context Context) func(name.AccountName) int64 {
+func getAccountCreationTime(context Context) interface{} {
 	return func(accountName name.AccountName) int64 {
 		account, err := context.GetApplyContext().FindAccount(accountName)
 

@@ -2,6 +2,10 @@ package api
 
 import "github.com/MetalBlockchain/antelopevm/math"
 
+var (
+	Functions = make(map[string]func(context Context) interface{})
+)
+
 type Context interface {
 	GetController() Controller
 	GetApplyContext() ApplyContext

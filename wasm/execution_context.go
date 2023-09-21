@@ -14,10 +14,7 @@ import (
 var _ wasmApi.Context = &ExecutionContext{}
 
 type ExecutionContext struct {
-	context               context.Context
-	cancelFunc            context.CancelFunc
-	engine                wazero.Runtime
-	module                api.Module
+	memory                api.Memory
 	controller            wasmApi.Controller
 	applyContext          wasmApi.ApplyContext
 	authorizationManager  wasmApi.AuthorizationManager
@@ -41,7 +38,6 @@ func NewWasmExecutionContext(context context.Context,
 	idxLongDouble wasmApi.MultiIndex[math.Float128],
 ) *ExecutionContext {
 	return &ExecutionContext{
-		context:               context,
 		controller:            controller,
 		applyContext:          applyContext,
 		authorizationManager:  authorizationManager,
@@ -55,14 +51,15 @@ func NewWasmExecutionContext(context context.Context,
 }
 
 func (c *ExecutionContext) Exec(wasmCode []byte) error {
-	ctx, _ := context.WithTimeout(context.Background(), 32*time.Nanosecond)
-	runtime := wazero.NewRuntime(c.context)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	runtime := wazero.NewRuntime(ctx)
 	// This closes everything this runtime created
 	defer runtime.Close(ctx)
-	builder := c.engine.NewHostModuleBuilder("env")
+	builder := runtime.NewHostModuleBuilder("env")
 
-	for name, f := range wasmApi.GetActionFunctions(c) {
-		builder.NewFunctionBuilder().WithFunc(f).Export(name)
+	for name, function := range wasmApi.Functions {
+		builder.NewFunctionBuilder().WithFunc(function(c)).Export(name)
 	}
 
 	if _, err := builder.Instantiate(ctx); err != nil {
@@ -73,6 +70,7 @@ func (c *ExecutionContext) Exec(wasmCode []byte) error {
 	if err != nil {
 		return err
 	}
+	c.memory = module.Memory()
 
 	// All Leap contracts export the apply function as the main entrypoint
 	applyFunc := module.ExportedFunction("apply")
@@ -85,7 +83,7 @@ func (c *ExecutionContext) Exec(wasmCode []byte) error {
 	actionName := c.applyContext.GetAction().Name
 
 	// Run the apply function with the given data
-	if _, resultErr := applyFunc.Call(c.context, uint64(receiver), uint64(code), uint64(actionName)); resultErr != nil {
+	if _, resultErr := applyFunc.Call(ctx, uint64(receiver), uint64(code), uint64(actionName)); resultErr != nil {
 		return fmt.Errorf("execution failed: %s", resultErr)
 	}
 
@@ -94,7 +92,7 @@ func (c *ExecutionContext) Exec(wasmCode []byte) error {
 
 // This function will read an array of bytes from the WASM memory, it panics on purpose when the read is out of range to kill the WASM execution environment
 func (c *ExecutionContext) ReadMemory(start uint32, length uint32) []byte {
-	if data, ok := c.module.Memory().Read(start, length); !ok {
+	if data, ok := c.memory.Read(start, length); !ok {
 		panic("memory read out of range")
 	} else {
 		return data
@@ -103,13 +101,13 @@ func (c *ExecutionContext) ReadMemory(start uint32, length uint32) []byte {
 
 // This function will write an array of bytes to the WASM memory, it panics on purpose when the write is out of range to kill the WASM execution environment
 func (c *ExecutionContext) WriteMemory(start uint32, data []byte) {
-	if ok := c.module.Memory().Write(start, data); !ok {
+	if ok := c.memory.Write(start, data); !ok {
 		panic("memory write out of range")
 	}
 }
 
 func (c *ExecutionContext) GetMemorySize() uint32 {
-	return c.module.Memory().Size()
+	return c.memory.Size()
 }
 
 func (c *ExecutionContext) GetController() wasmApi.Controller {
@@ -150,5 +148,5 @@ func (c *ExecutionContext) GetIdxLongDouble() wasmApi.MultiIndex[math.Float128] 
 
 // Shutdown kills the running WASM context
 func (c *ExecutionContext) Shutdown() {
-	c.cancelFunc()
+
 }

@@ -6,6 +6,14 @@ import (
 	"github.com/inconshreveable/log15"
 )
 
+func init() {
+	Functions["abort"] = abort
+	Functions["eosio_assert"] = assert
+	Functions["eosio_assert_message"] = assertMessage
+	Functions["eosio_assert_code"] = assertCode
+	Functions["eosio_exit"] = exit
+}
+
 func GetContextFreeSystemFunctions(context Context) map[string]interface{} {
 	functions := make(map[string]interface{})
 
@@ -18,13 +26,13 @@ func GetContextFreeSystemFunctions(context Context) map[string]interface{} {
 	return functions
 }
 
-func abort(context Context) func() {
+func abort(context Context) interface{} {
 	return func() {
 		panic("abort called")
 	}
 }
 
-func assert(context Context) func(uint32, uint32) {
+func assert(context Context) interface{} {
 	return func(condition uint32, ptr uint32) {
 		if condition == 0 {
 			data := context.ReadMemory(ptr, 512)
@@ -47,7 +55,7 @@ func assert(context Context) func(uint32, uint32) {
 	}
 }
 
-func assertMessage(context Context) func(uint32, uint32, uint32) {
+func assertMessage(context Context) interface{} {
 	return func(condition uint32, ptr uint32, size uint32) {
 		if condition == 0 {
 			data := context.ReadMemory(ptr, size)
@@ -57,7 +65,7 @@ func assertMessage(context Context) func(uint32, uint32, uint32) {
 	}
 }
 
-func assertCode(context Context) func(uint32, uint64) {
+func assertCode(context Context) interface{} {
 	return func(condition uint32, code uint64) {
 		if condition == 0 {
 			panic(fmt.Sprintf("assertion failure with error code: %v", code))
@@ -65,7 +73,7 @@ func assertCode(context Context) func(uint32, uint64) {
 	}
 }
 
-func exit(context Context) func(int32) {
+func exit(context Context) interface{} {
 	return func(int32) {
 		panic("eosio_exit called")
 	}

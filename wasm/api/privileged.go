@@ -5,6 +5,24 @@ import (
 	"github.com/MetalBlockchain/antelopevm/core/producer"
 )
 
+func init() {
+	Functions["is_feature_active"] = isFeatureActive
+	Functions["activate_feature"] = activateFeature
+	Functions["preactivate_feature"] = preactivateFeature
+	Functions["set_resource_limits"] = setResourceLimits
+	Functions["get_resource_limits"] = getResourceLimits
+	Functions["get_wasm_parameters_packed"] = getWasmParametersPacked
+	Functions["set_wasm_parameters_packed"] = setWasmParametersPacked
+	Functions["set_proposed_producers"] = setProposedProducers
+	Functions["set_proposed_producers_ex"] = setProposedProducersEx
+	Functions["get_blockchain_parameters_packed"] = getBlockchainParametersPacked
+	Functions["set_blockchain_parameters_packed"] = setBlockchainParametersPacked
+	Functions["get_parameters_packed"] = getParametersPacked
+	Functions["set_parameters_packed"] = setParametersPacked
+	Functions["is_privileged"] = isPrivileged
+	Functions["set_privileged"] = setPrivileged
+}
+
 func GetPrivilegedFunctions(context Context) map[string]interface{} {
 	functions := make(map[string]interface{})
 
@@ -27,7 +45,7 @@ func GetPrivilegedFunctions(context Context) map[string]interface{} {
 	return functions
 }
 
-func isFeatureActive(context Context) func(name.Name) int32 {
+func isFeatureActive(context Context) interface{} {
 	return func(featureName name.Name) int32 {
 		checkPrivileged(context)
 
@@ -35,7 +53,7 @@ func isFeatureActive(context Context) func(name.Name) int32 {
 	}
 }
 
-func activateFeature(context Context) func(name.Name) {
+func activateFeature(context Context) interface{} {
 	return func(featureName name.Name) {
 		checkPrivileged(context)
 
@@ -43,7 +61,7 @@ func activateFeature(context Context) func(name.Name) {
 	}
 }
 
-func preactivateFeature(context Context) func(uint32) {
+func preactivateFeature(context Context) interface{} {
 	return func(ptr uint32) {
 		checkPrivileged(context)
 
@@ -51,7 +69,7 @@ func preactivateFeature(context Context) func(uint32) {
 	}
 }
 
-func setResourceLimits(context Context) func(name.AccountName, int64, int64, int64) {
+func setResourceLimits(context Context) interface{} {
 	return func(account name.AccountName, ramBytes int64, netWeight int64, cpuWeight int64) {
 		checkPrivileged(context)
 
@@ -71,7 +89,7 @@ func setResourceLimits(context Context) func(name.AccountName, int64, int64, int
 	}
 }
 
-func getResourceLimits(context Context) func(name.AccountName, uint32, uint32, uint32) {
+func getResourceLimits(context Context) interface{} {
 	return func(account name.AccountName, ramBytesPtr uint32, netWeightPtr uint32, cpuWeightPtr uint32) {
 		checkPrivileged(context)
 
@@ -87,7 +105,7 @@ func getResourceLimits(context Context) func(name.AccountName, uint32, uint32, u
 	}
 }
 
-func getWasmParametersPacked(context Context) func(uint32, uint32, uint32) uint32 {
+func getWasmParametersPacked(context Context) interface{} {
 	return func(ptr uint32, length uint32, maxVersion uint32) uint32 {
 		checkPrivileged(context)
 
@@ -95,7 +113,7 @@ func getWasmParametersPacked(context Context) func(uint32, uint32, uint32) uint3
 	}
 }
 
-func setWasmParametersPacked(context Context) func(uint32, uint32) {
+func setWasmParametersPacked(context Context) interface{} {
 	return func(ptr uint32, length uint32) {
 		checkPrivileged(context)
 
@@ -103,7 +121,7 @@ func setWasmParametersPacked(context Context) func(uint32, uint32) {
 	}
 }
 
-func setProposedProducers(context Context) func(uint32, uint32) int64 {
+func setProposedProducers(context Context) interface{} {
 	return func(ptr uint32, length uint32) int64 {
 		checkPrivileged(context)
 
@@ -111,7 +129,7 @@ func setProposedProducers(context Context) func(uint32, uint32) int64 {
 	}
 }
 
-func setProposedProducersEx(context Context) func(uint64, uint32, uint32) int64 {
+func setProposedProducersEx(context Context) interface{} {
 	return func(format uint64, ptr uint32, length uint32) int64 {
 		checkPrivileged(context)
 
@@ -119,7 +137,7 @@ func setProposedProducersEx(context Context) func(uint64, uint32, uint32) int64 
 	}
 }
 
-func getBlockchainParametersPacked(context Context) func(uint32, uint32) uint32 {
+func getBlockchainParametersPacked(context Context) interface{} {
 	return func(ptr uint32, length uint32) uint32 {
 		checkPrivileged(context)
 
@@ -127,7 +145,7 @@ func getBlockchainParametersPacked(context Context) func(uint32, uint32) uint32 
 	}
 }
 
-func setBlockchainParametersPacked(context Context) func(uint32, uint32) {
+func setBlockchainParametersPacked(context Context) interface{} {
 	return func(ptr uint32, length uint32) {
 		checkPrivileged(context)
 
@@ -135,7 +153,7 @@ func setBlockchainParametersPacked(context Context) func(uint32, uint32) {
 	}
 }
 
-func getParametersPacked(context Context) func(uint32, uint32, uint32, uint32) uint32 {
+func getParametersPacked(context Context) interface{} {
 	return func(idsPtr uint32, idsLength uint32, parametersPtr uint32, parametersLength uint32) uint32 {
 		checkPrivileged(context)
 
@@ -143,7 +161,7 @@ func getParametersPacked(context Context) func(uint32, uint32, uint32, uint32) u
 	}
 }
 
-func setParametersPacked(context Context) func(uint32, uint32) {
+func setParametersPacked(context Context) interface{} {
 	return func(ptr uint32, length uint32) {
 		checkPrivileged(context)
 
@@ -151,7 +169,7 @@ func setParametersPacked(context Context) func(uint32, uint32) {
 	}
 }
 
-func isPrivileged(context Context) func(name.AccountName) int32 {
+func isPrivileged(context Context) interface{} {
 	return func(account name.AccountName) int32 {
 		checkPrivileged(context)
 
@@ -169,7 +187,7 @@ func isPrivileged(context Context) func(name.AccountName) int32 {
 	}
 }
 
-func setPrivileged(context Context) func(name.AccountName, int32) {
+func setPrivileged(context Context) interface{} {
 	return func(account name.AccountName, isPrivileged int32) {
 		checkPrivileged(context)
 

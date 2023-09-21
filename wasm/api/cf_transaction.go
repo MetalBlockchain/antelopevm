@@ -6,6 +6,15 @@ import (
 	"github.com/MetalBlockchain/antelopevm/utils"
 )
 
+func init() {
+	Functions["read_transaction"] = readTransaction
+	Functions["transaction_size"] = transactionSize
+	Functions["expiration"] = expiration
+	Functions["tapos_block_num"] = taposBlockNum
+	Functions["tapos_block_prefix"] = taposBlockPrefix
+	Functions["get_action"] = getAction
+}
+
 func GetContextFreeTransactionFunctions(context Context) map[string]interface{} {
 	functions := make(map[string]interface{})
 
@@ -19,7 +28,7 @@ func GetContextFreeTransactionFunctions(context Context) map[string]interface{} 
 	return functions
 }
 
-func readTransaction(context Context) func(uint32, uint32) uint32 {
+func readTransaction(context Context) interface{} {
 	return func(ptr uint32, length uint32) uint32 {
 		trx := context.GetApplyContext().GetPackedTransaction()
 		trxBytes, err := rlp.EncodeToBytes(trx)
@@ -41,7 +50,7 @@ func readTransaction(context Context) func(uint32, uint32) uint32 {
 	}
 }
 
-func transactionSize(context Context) func() uint32 {
+func transactionSize(context Context) interface{} {
 	return func() uint32 {
 		trx := context.GetApplyContext().GetPackedTransaction()
 		trxBytes, err := rlp.EncodeToBytes(trx)
@@ -54,7 +63,7 @@ func transactionSize(context Context) func() uint32 {
 	}
 }
 
-func expiration(context Context) func() uint32 {
+func expiration(context Context) interface{} {
 	return func() uint32 {
 		trx, err := context.GetApplyContext().GetPackedTransaction().GetTransaction()
 
@@ -66,7 +75,7 @@ func expiration(context Context) func() uint32 {
 	}
 }
 
-func taposBlockNum(context Context) func() uint32 {
+func taposBlockNum(context Context) interface{} {
 	return func() uint32 {
 		trx, err := context.GetApplyContext().GetPackedTransaction().GetTransaction()
 
@@ -78,7 +87,7 @@ func taposBlockNum(context Context) func() uint32 {
 	}
 }
 
-func taposBlockPrefix(context Context) func() uint32 {
+func taposBlockPrefix(context Context) interface{} {
 	return func() uint32 {
 		trx, err := context.GetApplyContext().GetPackedTransaction().GetTransaction()
 
@@ -90,7 +99,7 @@ func taposBlockPrefix(context Context) func() uint32 {
 	}
 }
 
-func getAction(context Context) func(uint32, uint32, uint32, uint32) int32 {
+func getAction(context Context) interface{} {
 	return func(actionType uint32, index uint32, ptr uint32, length uint32) int32 {
 		trx, err := context.GetApplyContext().GetPackedTransaction().GetTransaction()
 
