@@ -1,11 +1,15 @@
-package service
+package chain_api_plugin
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"strconv"
 
 	"github.com/MetalBlockchain/antelopevm/core"
 	"github.com/MetalBlockchain/antelopevm/state"
+	"github.com/MetalBlockchain/antelopevm/vm/service"
+	"github.com/MetalBlockchain/metalgo/ids"
+	"github.com/gin-gonic/gin"
 )
 
 // Some services send the ID as an int or a string, so we need to handle this
@@ -51,5 +55,54 @@ func NewGetBlockResponse(block *state.Block) GetBlockResponse {
 		ID:           block.ID().Hex(),
 		BlockNum:     block.Header.Index,
 		Transactions: transactions,
+	}
+}
+
+func init() {
+	service.RegisterHandler("/v1/chain/get_block", GetBlock)
+}
+
+func GetBlock(vm service.VM) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var body GetBlockRequest
+		json.NewDecoder(c.Request.Body).Decode(&body)
+
+		session := vm.GetState().CreateSession(false)
+		defer session.Discard()
+
+		if val, err := strconv.ParseUint(string(body.BlockNumOrId), 10, 64); err == nil {
+			block, err := session.FindBlockByIndex(val)
+
+			if err != nil {
+				c.JSON(400, service.NewError(400, "could not parse block num"))
+				return
+			}
+
+			c.JSON(200, NewGetBlockResponse(block))
+			return
+		}
+
+		blockHash, err := hex.DecodeString(string(body.BlockNumOrId))
+
+		if err != nil {
+			c.JSON(400, service.NewError(400, "could not parse block num"))
+			return
+		}
+
+		blockID, err := ids.ToID(blockHash)
+
+		if err != nil {
+			c.JSON(400, service.NewError(400, "could not parse block num"))
+			return
+		}
+
+		block, err := session.FindBlockByHash(core.BlockHash(blockID))
+
+		if err != nil {
+			c.JSON(400, service.NewError(400, "could not parse block num"))
+			return
+		}
+
+		c.JSON(200, NewGetBlockResponse(block))
 	}
 }

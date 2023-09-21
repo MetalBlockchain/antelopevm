@@ -1,6 +1,12 @@
-package service
+package chain_api_plugin
 
-import "github.com/MetalBlockchain/antelopevm/state"
+import (
+	"encoding/json"
+
+	"github.com/MetalBlockchain/antelopevm/state"
+	"github.com/MetalBlockchain/antelopevm/vm/service"
+	"github.com/gin-gonic/gin"
+)
 
 type GetBlockInfoRequest struct {
 	BlockNum uint64 `json:"block_num"`
@@ -27,5 +33,28 @@ func NewGetBlockInfoResponse(block *state.Block) GetBlockInfoResponse {
 		BlockNum:       block.Header.Index,
 		RefBlockNum:    block.Header.Index,
 		RefBlockPrefix: block.Header.Index,
+	}
+}
+
+func init() {
+	service.RegisterHandler("/v1/chain/get_block_info", GetBlockInfo)
+}
+
+func GetBlockInfo(vm service.VM) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var body GetBlockInfoRequest
+		json.NewDecoder(c.Request.Body).Decode(&body)
+
+		session := vm.GetState().CreateSession(false)
+		defer session.Discard()
+
+		block, err := session.FindBlockByIndex(body.BlockNum)
+
+		if err != nil {
+			c.JSON(404, service.NewError(404, "block not found"))
+			return
+		}
+
+		c.JSON(200, NewGetBlockInfoResponse(block))
 	}
 }

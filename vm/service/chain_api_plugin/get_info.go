@@ -1,9 +1,18 @@
 package chain_api_plugin
 
 import (
+	"context"
+
 	"github.com/MetalBlockchain/antelopevm/core"
+	"github.com/MetalBlockchain/antelopevm/crypto"
 	"github.com/MetalBlockchain/antelopevm/state"
+	"github.com/MetalBlockchain/antelopevm/vm/service"
+	"github.com/gin-gonic/gin"
 )
+
+func init() {
+	service.RegisterHandler("/v1/chain/get_info", GetInfo)
+}
 
 type ChainInfoResponse struct {
 	ServerVersion            string           `json:"server_version"`
@@ -40,5 +49,16 @@ func NewChainInfoResponse(version string, lastAcceptedBlock *state.Block, chainI
 		VirtualBlockNetLimit:     1048576000,
 		BlockCpuLimit:            198868,
 		BlockNetLimit:            1048208,
+	}
+}
+
+func GetInfo(vm service.VM) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		version := "aaa"
+		lastAcceptedId, _ := vm.LastAccepted(context.Background())
+		lastAccepted, _ := vm.GetState().CreateSession(false).FindBlockByHash(core.BlockHash(lastAcceptedId))
+		info := NewChainInfoResponse(version, lastAccepted, *crypto.Hash256("lll"))
+
+		c.JSON(200, info)
 	}
 }
