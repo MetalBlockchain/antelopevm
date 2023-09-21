@@ -16,17 +16,6 @@ func init() {
 	Functions["get_account_creation_time"] = getAccountCreationTime
 }
 
-func GetPermissionFunctions(context Context) map[string]interface{} {
-	functions := make(map[string]interface{})
-
-	functions["check_transaction_authorization"] = checkTransactionAuthorization(context)
-	functions["check_permission_authorization"] = checkPermissionAuthorization(context)
-	functions["get_permission_last_used"] = getPermissionLastUsed(context)
-	functions["get_account_creation_time"] = getAccountCreationTime(context)
-
-	return functions
-}
-
 func checkTransactionAuthorization(context Context) interface{} {
 	return func(trxPtr uint32, trxSize uint32, pubKeys uint32, pubKeysSize uint32, perms uint32, permsSize uint32) int32 {
 		trxDataBytes := context.ReadMemory(trxPtr, trxSize)

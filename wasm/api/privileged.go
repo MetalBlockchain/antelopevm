@@ -23,28 +23,6 @@ func init() {
 	Functions["set_privileged"] = setPrivileged
 }
 
-func GetPrivilegedFunctions(context Context) map[string]interface{} {
-	functions := make(map[string]interface{})
-
-	functions["is_feature_active"] = isFeatureActive(context)
-	functions["activate_feature"] = activateFeature(context)
-	functions["preactivate_feature"] = preactivateFeature(context)
-	functions["set_resource_limits"] = setResourceLimits(context)
-	functions["get_resource_limits"] = getResourceLimits(context)
-	functions["get_wasm_parameters_packed"] = getWasmParametersPacked(context)
-	functions["set_wasm_parameters_packed"] = setWasmParametersPacked(context)
-	functions["set_proposed_producers"] = setProposedProducers(context)
-	functions["set_proposed_producers_ex"] = setProposedProducersEx(context)
-	functions["get_blockchain_parameters_packed"] = getBlockchainParametersPacked(context)
-	functions["set_blockchain_parameters_packed"] = setBlockchainParametersPacked(context)
-	functions["get_parameters_packed"] = getParametersPacked(context)
-	functions["set_parameters_packed"] = setParametersPacked(context)
-	functions["is_privileged"] = isPrivileged(context)
-	functions["set_privileged"] = setPrivileged(context)
-
-	return functions
-}
-
 func isFeatureActive(context Context) interface{} {
 	return func(featureName name.Name) int32 {
 		checkPrivileged(context)

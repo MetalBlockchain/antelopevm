@@ -14,17 +14,6 @@ func init() {
 	Functions["cancel_deferred"] = cancelDeferred
 }
 
-func GetTransactionFunctions(context Context) map[string]interface{} {
-	functions := make(map[string]interface{})
-
-	functions["send_inline"] = sendInline(context)
-	functions["send_context_free_inline"] = sendContextFreeInline(context)
-	functions["send_deferred"] = sendDeferred(context)
-	functions["cancel_deferred"] = cancelDeferred(context)
-
-	return functions
-}
-
 func sendInline(context Context) interface{} {
 	return func(ptr uint32, length uint32) {
 		if length >= uint32(config.MaxInlineActionSize) {

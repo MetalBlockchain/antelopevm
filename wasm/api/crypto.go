@@ -22,23 +22,6 @@ func init() {
 	Functions["ripemd160"] = ripemd160
 }
 
-func GetCryptoFunctions(context Context) map[string]interface{} {
-	functions := make(map[string]interface{})
-
-	functions["assert_recover_key"] = assertRecoverKey(context)
-	functions["recover_key"] = recoverKey(context)
-	functions["assert_sha256"] = assertSha256(context)
-	functions["assert_sha1"] = assertSha1(context)
-	functions["assert_sha512"] = assertSha512(context)
-	functions["assert_ripemd160"] = assertRipemd160(context)
-	functions["sha256"] = sha256(context)
-	functions["sha1"] = sha1(context)
-	functions["sha512"] = sha512(context)
-	functions["ripemd160"] = ripemd160(context)
-
-	return functions
-}
-
 func assertRecoverKey(context Context) interface{} {
 	return func(digest uint32, signature uint32, signatureLength uint32, publicKey uint32, publicKeyLength uint32) {
 		digestBytes := context.ReadMemory(digest, 32)

@@ -14,18 +14,6 @@ func init() {
 	Functions["eosio_exit"] = exit
 }
 
-func GetContextFreeSystemFunctions(context Context) map[string]interface{} {
-	functions := make(map[string]interface{})
-
-	functions["abort"] = abort(context)
-	functions["eosio_assert"] = assert(context)
-	functions["eosio_assert_message"] = assertMessage(context)
-	functions["eosio_assert_code"] = assertCode(context)
-	functions["eosio_exit"] = exit(context)
-
-	return functions
-}
-
 func abort(context Context) interface{} {
 	return func() {
 		panic("abort called")

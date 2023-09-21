@@ -2,7 +2,6 @@ package api
 
 import (
 	"github.com/MetalBlockchain/antelopevm/core/name"
-	"github.com/inconshreveable/log15"
 )
 
 func init() {
@@ -14,7 +13,6 @@ func init() {
 
 func readActionData(context Context) interface{} {
 	return func(msg uint32, size uint32) uint32 {
-		log15.Info("read_action_data", "msg", msg, "size", size)
 		if size == 0 {
 			return uint32(context.GetApplyContext().GetAction().Data.Size())
 		}

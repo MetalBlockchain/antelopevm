@@ -15,19 +15,6 @@ func init() {
 	Functions["get_action"] = getAction
 }
 
-func GetContextFreeTransactionFunctions(context Context) map[string]interface{} {
-	functions := make(map[string]interface{})
-
-	functions["read_transaction"] = readTransaction(context)
-	functions["transaction_size"] = transactionSize(context)
-	functions["expiration"] = expiration(context)
-	functions["tapos_block_num"] = taposBlockNum(context)
-	functions["tapos_block_prefix"] = taposBlockPrefix(context)
-	functions["get_action"] = getAction(context)
-
-	return functions
-}
-
 func readTransaction(context Context) interface{} {
 	return func(ptr uint32, length uint32) uint32 {
 		trx := context.GetApplyContext().GetPackedTransaction()

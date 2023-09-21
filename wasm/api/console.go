@@ -24,24 +24,6 @@ func init() {
 	Functions["printhex"] = printhex
 }
 
-func GetConsoleFunctions(context Context) map[string]interface{} {
-	functions := make(map[string]interface{})
-
-	functions["prints"] = prints(context)
-	functions["prints_l"] = prints_l(context)
-	functions["printi"] = printi(context)
-	functions["printui"] = printui(context)
-	functions["printi128"] = printi128(context)
-	functions["printui128"] = printui128(context)
-	functions["printsf"] = printsf(context)
-	functions["printdf"] = printdf(context)
-	functions["printqf"] = printqf(context)
-	functions["printn"] = printn(context)
-	functions["printhex"] = printhex(context)
-
-	return functions
-}
-
 func prints(context Context) interface{} {
 	return func(ptr uint32) {
 		data := context.ReadMemory(ptr, 512)

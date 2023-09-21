@@ -53,55 +53,6 @@ func init() {
 	Functions["__unordtf2"] = __unordtf2
 }
 
-func GetCompilerBuiltinFunctions(c Context) map[string]interface{} {
-	functions := make(map[string]interface{})
-	functions["__ashlti3"] = __ashlti3(c)
-	functions["__ashrti3"] = __ashrti3(c)
-	functions["__lshlti3"] = __lshlti3(c)
-	functions["__lshrti3"] = __lshrti3(c)
-	functions["__divti3"] = __divti3(c)
-	functions["__udivti3"] = __udivti3(c)
-	functions["__multi3"] = __multi3(c)
-	functions["__modti3"] = __modti3(c)
-	functions["__umodti3"] = __umodti3(c)
-	functions["__addtf3"] = __addtf3(c)
-	functions["__subtf3"] = __subtf3(c)
-	functions["__multf3"] = __multf3(c)
-	functions["__divtf3"] = __divtf3(c)
-	functions["__negtf2"] = __negtf2(c)
-	functions["__extendsftf2"] = __extendsftf2(c)
-	functions["__extenddftf2"] = __extenddftf2(c)
-	functions["__trunctfdf2"] = __trunctfdf2(c)
-	functions["__trunctfsf2"] = __trunctfsf2(c)
-	functions["__fixtfsi"] = __fixtfsi(c)
-	functions["__fixtfdi"] = __fixtfdi(c)
-	functions["__fixtfti"] = __fixtfti(c)
-	functions["__fixunstfsi"] = __fixunstfsi(c)
-	functions["__fixunstfdi"] = __fixunstfdi(c)
-	functions["__fixunstfti"] = __fixunstfti(c)
-	functions["__fixsfti"] = __fixsfti(c)
-	functions["__fixdfti"] = __fixdfti(c)
-	functions["__fixunssfti"] = __fixunssfti(c)
-	functions["__fixunsdfti"] = __fixunsdfti(c)
-	functions["__floatsidf"] = __floatsidf(c)
-	functions["__floatsitf"] = __floatsitf(c)
-	functions["__floatditf"] = __floatditf(c)
-	functions["__floatunsitf"] = __floatunsitf(c)
-	functions["__floatunditf"] = __floatunditf(c)
-	functions["__floattidf"] = __floattidf(c)
-	functions["__floatuntidf"] = __floatuntidf(c)
-	functions["__eqtf2"] = __eqtf2(c)
-	functions["__netf2"] = __netf2(c)
-	functions["__getf2"] = __getf2(c)
-	functions["__gttf2"] = __gttf2(c)
-	functions["__letf2"] = __letf2(c)
-	functions["__lttf2"] = __lttf2(c)
-	functions["__cmptf2"] = __cmptf2(c)
-	functions["__unordtf2"] = __unordtf2(c)
-
-	return functions
-}
-
 func __ashlti3(context Context) interface{} {
 	return func(ptr uint32, low uint64, high uint64, shift uint32) {
 		i := eosMath.Int128{Low: low, High: high}

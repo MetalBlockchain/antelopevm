@@ -13,17 +13,6 @@ func init() {
 	Functions["memcmp"] = MemCmp
 }
 
-func GetMemoryFunctions(context Context) map[string]interface{} {
-	functions := make(map[string]interface{})
-
-	functions["memset"] = MemSet(context)
-	functions["memcpy"] = MemCopy(context)
-	functions["memmove"] = MemMove(context)
-	functions["memcmp"] = MemCmp(context)
-
-	return functions
-}
-
 func MemSet(context Context) interface{} {
 	return func(dest uint32, value int32, length uint32) uint32 {
 		destData := context.ReadMemory(dest, length)

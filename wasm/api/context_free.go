@@ -8,14 +8,6 @@ func init() {
 	Functions["get_context_free_data"] = getContextFreeData
 }
 
-func GetContextFreeFunctions(context Context) map[string]interface{} {
-	functions := make(map[string]interface{})
-
-	functions["get_context_free_data"] = getContextFreeData(context)
-
-	return functions
-}
-
 func getContextFreeData(context Context) interface{} {
 	return func(index uint32, ptr uint32, length uint32) int32 {
 		trx, err := context.GetApplyContext().GetPackedTransaction().GetSignedTransaction()
