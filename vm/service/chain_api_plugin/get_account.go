@@ -2,6 +2,7 @@ package chain_api_plugin
 
 import (
 	"encoding/json"
+	"net/http"
 
 	"github.com/MetalBlockchain/antelopevm/core"
 	"github.com/MetalBlockchain/antelopevm/core/authority"
@@ -54,7 +55,10 @@ type GetAccountResponse struct {
 }
 
 func init() {
-	service.RegisterHandler("/v1/chain/get_account", GetAccount)
+	service.RegisterHandler("/v1/chain/get_account", service.Handler{
+		Methods:     []string{http.MethodPost},
+		HandlerFunc: GetAccount,
+	})
 }
 
 func GetAccount(vm service.VM) gin.HandlerFunc {

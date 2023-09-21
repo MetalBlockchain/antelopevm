@@ -1,6 +1,8 @@
 package chain_api_plugin
 
 import (
+	"net/http"
+
 	"github.com/MetalBlockchain/antelopevm/core/name"
 	"github.com/MetalBlockchain/antelopevm/vm/service"
 	"github.com/MetalBlockchain/antelopevm/vm/service/history_api_plugin"
@@ -8,7 +10,10 @@ import (
 )
 
 func init() {
-	service.RegisterHandler("/v1/chain/get_key_accounts", GetKeyAccounts)
+	service.RegisterHandler("/v1/chain/get_key_accounts", service.Handler{
+		Methods:     []string{http.MethodPost},
+		HandlerFunc: GetKeyAccounts,
+	})
 }
 
 func GetKeyAccounts(vm service.VM) gin.HandlerFunc {

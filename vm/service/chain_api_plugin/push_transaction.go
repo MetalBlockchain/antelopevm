@@ -2,6 +2,7 @@ package chain_api_plugin
 
 import (
 	"encoding/json"
+	"net/http"
 
 	"github.com/MetalBlockchain/antelopevm/core"
 	"github.com/MetalBlockchain/antelopevm/vm/service"
@@ -14,8 +15,14 @@ type PushTransactionResults struct {
 }
 
 func init() {
-	service.RegisterHandler("/v1/chain/send_transaction", PushTransaction)
-	service.RegisterHandler("/v1/chain/push_transaction", PushTransaction)
+	service.RegisterHandler("/v1/chain/send_transaction", service.Handler{
+		Methods:     []string{http.MethodPost},
+		HandlerFunc: PushTransaction,
+	})
+	service.RegisterHandler("/v1/chain/push_transaction", service.Handler{
+		Methods:     []string{http.MethodPost},
+		HandlerFunc: PushTransaction,
+	})
 }
 
 func PushTransaction(vm service.VM) gin.HandlerFunc {

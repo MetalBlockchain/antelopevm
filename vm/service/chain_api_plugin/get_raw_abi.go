@@ -3,6 +3,8 @@ package chain_api_plugin
 import (
 	"encoding/base64"
 	"encoding/json"
+	"net/http"
+	"strconv"
 
 	"github.com/MetalBlockchain/antelopevm/core/name"
 	"github.com/MetalBlockchain/antelopevm/crypto"
@@ -22,7 +24,10 @@ type GetRawAbiResponse struct {
 }
 
 func init() {
-	service.RegisterHandler("/v1/chain/get_raw_abi", GetRawAbi)
+	service.RegisterHandler("/v1/chain/get_raw_abi", service.Handler{
+		Methods:     []string{http.MethodPost},
+		HandlerFunc: GetRawAbi,
+	})
 }
 
 func GetRawAbi(vm service.VM) gin.HandlerFunc {
@@ -54,7 +59,8 @@ func GetRawAbi(vm service.VM) gin.HandlerFunc {
 			AbiHash:     *crypto.NewSha256String("bf13acab1b4bc2676ef6f0afcf1765ab5db3ffa1ac18453a628e1e65fe26e045"),
 			Abi:         rawAbi,
 		}
-
-		c.JSON(200, response)
+		data, err := json.Marshal(response)
+		c.Writer.Write(data)
+		c.Writer.Header().Set("Content-Length", strconv.Itoa(len(data)))
 	}
 }

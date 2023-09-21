@@ -3,6 +3,7 @@ package chain_api_plugin
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 
 	"github.com/MetalBlockchain/antelopevm/abi"
 	"github.com/MetalBlockchain/antelopevm/core"
@@ -29,7 +30,10 @@ type GetTableRowsResponse struct {
 }
 
 func init() {
-	service.RegisterHandler("/v1/chain/get_table_rows", GetTableRows)
+	service.RegisterHandler("/v1/chain/get_table_rows", service.Handler{
+		Methods:     []string{http.MethodPost},
+		HandlerFunc: GetTableRows,
+	})
 }
 
 func GetTableRows(vm service.VM) gin.HandlerFunc {
@@ -45,7 +49,7 @@ func GetTableRows(vm service.VM) gin.HandlerFunc {
 		acc, err := session.FindAccountByName(body.Code)
 
 		if err != nil {
-			c.JSON(400, service.NewError(400, fmt.Sprintf("account with name %s does not exist", body.Code)))
+			c.AbortWithError(400, fmt.Errorf("account with name %s does not exist", body.Code))
 			return
 		}
 

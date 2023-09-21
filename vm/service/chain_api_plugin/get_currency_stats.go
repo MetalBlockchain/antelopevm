@@ -2,6 +2,7 @@ package chain_api_plugin
 
 import (
 	"encoding/json"
+	"net/http"
 	"strings"
 
 	"github.com/MetalBlockchain/antelopevm/core"
@@ -25,7 +26,10 @@ type CurrencyStats struct {
 type GetCurrencyStatsResponse map[string]CurrencyStats
 
 func init() {
-	service.RegisterHandler("/v1/chain/get_currency_stats", GetCurrencyStats)
+	service.RegisterHandler("/v1/chain/get_currency_stats", service.Handler{
+		Methods:     []string{http.MethodPost},
+		HandlerFunc: GetCurrencyStats,
+	})
 }
 
 func GetCurrencyStats(vm service.VM) gin.HandlerFunc {

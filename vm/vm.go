@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime/pprof"
@@ -16,6 +17,7 @@ import (
 	"github.com/MetalBlockchain/antelopevm/crypto"
 	"github.com/MetalBlockchain/antelopevm/mempool"
 	"github.com/MetalBlockchain/antelopevm/state"
+	"github.com/MetalBlockchain/antelopevm/vm/service"
 	"github.com/MetalBlockchain/metalgo/database/manager"
 	"github.com/MetalBlockchain/metalgo/ids"
 	"github.com/MetalBlockchain/metalgo/snow"
@@ -25,8 +27,11 @@ import (
 	"github.com/MetalBlockchain/metalgo/snow/engine/snowman/block"
 	"github.com/MetalBlockchain/metalgo/version"
 	"github.com/dgraph-io/badger/v3"
+	"github.com/gin-gonic/gin"
 
-	"github.com/inconshreveable/log15"
+	// Initializes service plugins
+	_ "github.com/MetalBlockchain/antelopevm/vm/service/chain_api_plugin"
+
 	log "github.com/inconshreveable/log15"
 )
 
@@ -45,6 +50,7 @@ var (
 
 	_ block.ChainVM = &VM{}
 	_ state.VM      = &VM{}
+	_ service.VM    = &VM{}
 )
 
 type VM struct {
@@ -215,58 +221,25 @@ func (vm *VM) initGenesis(genesisData []byte) error {
 // Keys: The path extension for this VM's API (empty in this case)
 // Values: The handler for the API
 func (vm *VM) CreateHandlers(ctx context.Context) (map[string]*common.HTTPHandler, error) {
-	service := &Service{vm}
+	handlers := make(map[string]*common.HTTPHandler)
+	router := gin.Default()
 
-	return map[string]*common.HTTPHandler{
-		"/v1/chain/get_info": {
-			Handler: NewRequestHandler(service.GetInfo),
-		},
-		"/v1/chain/get_account": {
-			Handler: NewRequestHandler(service.GetAccount),
-		},
-		"/v1/chain/get_block": {
-			Handler: NewRequestHandler(service.GetBlock),
-		},
-		"/v1/chain/get_block_info": {
-			Handler: NewRequestHandler(service.GetBlockInfo),
-		},
-		"/v1/chain/get_required_keys": {
-			Handler: NewRequestHandler(service.GetRequiredKeys),
-		},
-		"/v1/chain/send_transaction": {
-			Handler: NewRequestHandler(service.PushTransaction),
-		},
-		"/v1/chain/push_transaction": {
-			Handler: NewRequestHandler(service.PushTransaction),
-		},
-		"/v1/chain/get_code_hash": {
-			Handler: NewRequestHandler(service.GetCodeHash),
-		},
-		"/v1/chain/get_abi": {
-			Handler: NewRequestHandler(service.GetAbi),
-		},
-		"/v1/history/get_transaction": {
-			Handler: NewRequestHandler(service.GetTransaction),
-		},
-		"/v1/history/get_actions": {
-			Handler: NewRequestHandler(service.GetActions),
-		},
-		"/v1/chain/get_currency_balance": {
-			Handler: NewRequestHandler(service.GetCurrencyBalance),
-		},
-		"/v1/chain/get_currency_stats": {
-			Handler: NewRequestHandler(service.GetCurrencyStats),
-		},
-		"/v1/chain/get_table_rows": {
-			Handler: NewRequestHandler(service.GetTableRows),
-		},
-		"/v1/chain/get_raw_abi": {
-			Handler: NewRequestHandler(service.GetRawAbi),
-		},
-		"/v1/history/get_key_accounts": {
-			Handler: NewRequestHandler(service.GetKeyAccounts),
-		},
-	}, nil
+	for path, handler := range service.GetHandlers() {
+		for _, method := range handler.Methods {
+			if method == http.MethodPost {
+				router.POST("/ext/bc/"+vm.ctx.ChainID.String()+path, handler.HandlerFunc(vm))
+			} else if method == http.MethodGet {
+				router.GET("/ext/bc/"+vm.ctx.ChainID.String()+path, handler.HandlerFunc(vm))
+			}
+		}
+
+		handlers[path] = &common.HTTPHandler{
+			LockOptions: common.NoLock,
+			Handler:     router.Handler(),
+		}
+	}
+
+	return handlers, nil
 }
 
 // CreateStaticHandlers returns a map where:
@@ -397,13 +370,11 @@ func (vm *VM) State() *state.State {
 
 // SetPreference sets the block with ID [ID] as the preferred block
 func (vm *VM) SetPreference(ctx context.Context, id ids.ID) error {
-	log15.Info("set preference", "preference", id)
 	vm.preferred = id
 	return nil
 }
 
 func (vm *VM) Verified(block *state.Block) error {
-	log.Info("verified block")
 	vm.verifiedBlocks[block.Hash] = block
 	return nil
 }
@@ -514,24 +485,20 @@ func (vm *VM) Version(ctx context.Context) (string, error) {
 }
 
 func (vm *VM) Connected(ctx context.Context, id ids.NodeID, nodeVersion *version.Application) error {
-	log.Info("connected to node", "nodeID", id, "version", nodeVersion)
 	return nil // noop
 }
 
 func (vm *VM) Disconnected(ctx context.Context, id ids.NodeID) error {
-	log.Info("disconnected from node", "nodeID", id)
 	return nil // noop
 }
 
 // This VM doesn't (currently) have any app-specific messages
 func (vm *VM) AppGossip(ctx context.Context, nodeID ids.NodeID, msg []byte) error {
-	log.Info("got gossip message", "nodeID", nodeID, "msg", msg)
 	return nil
 }
 
 // This VM doesn't (currently) have any app-specific messages
 func (vm *VM) AppRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, time time.Time, request []byte) error {
-	log.Info("got request message", "nodeID", nodeID, "msg", request)
 	return nil
 }
 
@@ -561,4 +528,12 @@ func (vm *VM) CrossChainAppRequestFailed(ctx context.Context, chainID ids.ID, re
 func (vm *VM) CrossChainAppResponse(ctx context.Context, chainID ids.ID, requestID uint32, request []byte) error {
 	// (currently) no app-specific messages
 	return nil
+}
+
+func (vm *VM) GetState() *state.State {
+	return vm.state
+}
+
+func (vm *VM) GetController() *chain.Controller {
+	return vm.controller
 }

@@ -2,16 +2,19 @@ package chain_api_plugin
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/MetalBlockchain/antelopevm/crypto"
 	"github.com/MetalBlockchain/antelopevm/state"
 	"github.com/MetalBlockchain/antelopevm/vm/service"
 	"github.com/gin-gonic/gin"
 )
 
 func init() {
-	service.RegisterHandler("/v1/chain/get_info", GetInfo)
+	service.RegisterHandler("/v1/chain/get_info", service.Handler{
+		Methods:     []string{http.MethodGet, http.MethodPost},
+		HandlerFunc: GetInfo,
+	})
 }
 
 type ChainInfoResponse struct {
@@ -57,7 +60,7 @@ func GetInfo(vm service.VM) gin.HandlerFunc {
 		version := "aaa"
 		lastAcceptedId, _ := vm.LastAccepted(context.Background())
 		lastAccepted, _ := vm.GetState().CreateSession(false).FindBlockByHash(core.BlockHash(lastAcceptedId))
-		info := NewChainInfoResponse(version, lastAccepted, *crypto.Hash256("lll"))
+		info := NewChainInfoResponse(version, lastAccepted, vm.GetController().ChainId)
 
 		c.JSON(200, info)
 	}

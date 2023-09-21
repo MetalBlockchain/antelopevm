@@ -2,6 +2,7 @@ package chain_api_plugin
 
 import (
 	"encoding/json"
+	"net/http"
 
 	"github.com/MetalBlockchain/antelopevm/core"
 	"github.com/MetalBlockchain/antelopevm/core/name"
@@ -17,7 +18,10 @@ type GetCurrencyBalanceRequest struct {
 }
 
 func init() {
-	service.RegisterHandler("/v1/chain/get_currency_balance", GetCurrencyBalance)
+	service.RegisterHandler("/v1/chain/get_currency_balance", service.Handler{
+		Methods:     []string{http.MethodPost},
+		HandlerFunc: GetCurrencyBalance,
+	})
 }
 
 func GetCurrencyBalance(vm service.VM) gin.HandlerFunc {

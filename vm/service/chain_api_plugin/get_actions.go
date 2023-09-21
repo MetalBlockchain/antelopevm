@@ -2,6 +2,7 @@ package chain_api_plugin
 
 import (
 	"encoding/json"
+	"net/http"
 
 	"github.com/MetalBlockchain/antelopevm/vm/service"
 	"github.com/gin-gonic/gin"
@@ -18,7 +19,10 @@ type GetActionsResponse struct {
 }
 
 func init() {
-	service.RegisterHandler("/v1/chain/get_actions", GetActions)
+	service.RegisterHandler("/v1/chain/get_actions", service.Handler{
+		Methods:     []string{http.MethodPost},
+		HandlerFunc: GetActions,
+	})
 }
 
 func GetActions(vm service.VM) gin.HandlerFunc {

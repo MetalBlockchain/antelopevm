@@ -4,9 +4,14 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var handlers = make(map[string]func(VM) gin.HandlerFunc)
+var handlers = make(map[string]Handler)
 
-func RegisterHandler(path string, handler func(VM) gin.HandlerFunc) {
+type Handler struct {
+	HandlerFunc func(VM) gin.HandlerFunc
+	Methods     []string
+}
+
+func RegisterHandler(path string, handler Handler) {
 	if _, ok := handlers[path]; ok {
 		panic("conflicting handler found")
 	}
@@ -14,6 +19,6 @@ func RegisterHandler(path string, handler func(VM) gin.HandlerFunc) {
 	handlers[path] = handler
 }
 
-func GetHandlers() map[string]func(VM) gin.HandlerFunc {
+func GetHandlers() map[string]Handler {
 	return handlers
 }

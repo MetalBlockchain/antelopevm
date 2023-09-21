@@ -3,6 +3,7 @@ package chain_api_plugin
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 
 	"github.com/MetalBlockchain/antelopevm/abi"
 	"github.com/MetalBlockchain/antelopevm/core"
@@ -53,7 +54,10 @@ type GetTransactionResponse struct {
 }
 
 func init() {
-	service.RegisterHandler("/v1/chain/get_transaction", GetTransaction)
+	service.RegisterHandler("/v1/chain/get_transaction", service.Handler{
+		Methods:     []string{http.MethodPost},
+		HandlerFunc: GetTransaction,
+	})
 }
 
 func GetTransaction(vm service.VM) gin.HandlerFunc {

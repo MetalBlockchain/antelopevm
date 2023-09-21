@@ -2,6 +2,7 @@ package chain_api_plugin
 
 import (
 	"encoding/json"
+	"net/http"
 
 	"github.com/MetalBlockchain/antelopevm/core/name"
 	"github.com/MetalBlockchain/antelopevm/crypto"
@@ -26,7 +27,10 @@ func NewGetCodeHashResponse(accountName string, codeHash crypto.Sha256) GetCodeH
 }
 
 func init() {
-	service.RegisterHandler("/v1/chain/get_code_hash", GetCodeHash)
+	service.RegisterHandler("/v1/chain/get_code_hash", service.Handler{
+		Methods:     []string{http.MethodPost},
+		HandlerFunc: GetCodeHash,
+	})
 }
 
 func GetCodeHash(vm service.VM) gin.HandlerFunc {

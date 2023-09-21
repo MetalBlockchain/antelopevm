@@ -2,6 +2,7 @@ package chain_api_plugin
 
 import (
 	"encoding/json"
+	"net/http"
 
 	"github.com/MetalBlockchain/antelopevm/core"
 	"github.com/MetalBlockchain/antelopevm/crypto/ecc"
@@ -19,7 +20,10 @@ type RequiredKeysResponse struct {
 }
 
 func init() {
-	service.RegisterHandler("/v1/chain/get_required_keys", GetRequiredKeys)
+	service.RegisterHandler("/v1/chain/get_required_keys", service.Handler{
+		Methods:     []string{http.MethodPost},
+		HandlerFunc: GetRequiredKeys,
+	})
 }
 
 func GetRequiredKeys(vm service.VM) gin.HandlerFunc {

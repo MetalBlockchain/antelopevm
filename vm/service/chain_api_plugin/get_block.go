@@ -3,6 +3,7 @@ package chain_api_plugin
 import (
 	"encoding/hex"
 	"encoding/json"
+	"net/http"
 	"strconv"
 
 	"github.com/MetalBlockchain/antelopevm/core"
@@ -59,7 +60,10 @@ func NewGetBlockResponse(block *state.Block) GetBlockResponse {
 }
 
 func init() {
-	service.RegisterHandler("/v1/chain/get_block", GetBlock)
+	service.RegisterHandler("/v1/chain/get_block", service.Handler{
+		Methods:     []string{http.MethodPost},
+		HandlerFunc: GetBlock,
+	})
 }
 
 func GetBlock(vm service.VM) gin.HandlerFunc {

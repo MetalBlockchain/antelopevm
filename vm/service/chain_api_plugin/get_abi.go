@@ -2,6 +2,7 @@ package chain_api_plugin
 
 import (
 	"encoding/json"
+	"net/http"
 
 	"github.com/MetalBlockchain/antelopevm/abi"
 	"github.com/MetalBlockchain/antelopevm/core/name"
@@ -19,7 +20,10 @@ type GetAbiResponse struct {
 }
 
 func init() {
-	service.RegisterHandler("/v1/chain/get_abi", GetAbi)
+	service.RegisterHandler("/v1/chain/get_abi", service.Handler{
+		Methods:     []string{http.MethodPost},
+		HandlerFunc: GetAbi,
+	})
 }
 
 func GetAbi(vm service.VM) gin.HandlerFunc {
