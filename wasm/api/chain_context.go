@@ -18,6 +18,10 @@ type AuthorizationManager interface {
 	CheckAuthorizationByPermissionLevel(account name.AccountName, permission name.PermissionName, keys ecc.PublicKeySet, providedPermissions []authority.PermissionLevel, allowUnusedKeys bool) error
 }
 
+type TransactionContext interface {
+	GetPublicationTime() core.TimePoint
+}
+
 type ApplyContext interface {
 	RequireAuthorization(account name.AccountName) error
 	RequireRecipient(recipient name.AccountName) error

@@ -9,7 +9,10 @@ import (
 	"github.com/MetalBlockchain/antelopevm/core/transaction"
 	"github.com/MetalBlockchain/antelopevm/crypto"
 	"github.com/MetalBlockchain/antelopevm/state"
+	"github.com/MetalBlockchain/antelopevm/wasm/api"
 )
+
+var _ api.TransactionContext = &TransactionContext{}
 
 type TransactionContext struct {
 	Control                      *Controller
@@ -325,4 +328,8 @@ func (t *TransactionContext) RecordTransaction(id core.TransactionIdType, expire
 		TrxId:      id,
 		Expiration: expire,
 	})
+}
+
+func (t *TransactionContext) GetPublicationTime() core.TimePoint {
+	return t.Published
 }

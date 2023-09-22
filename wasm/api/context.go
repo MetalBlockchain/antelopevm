@@ -8,6 +8,7 @@ var (
 
 type Context interface {
 	GetController() Controller
+	GetTransactionContext() TransactionContext
 	GetApplyContext() ApplyContext
 	GetIdx64() MultiIndex[uint64]
 	GetIdx128() MultiIndex[math.Uint128]

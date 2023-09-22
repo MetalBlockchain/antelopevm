@@ -207,7 +207,7 @@ Antelope VM relies on BadgerDB as its key-value store having access to the entir
 | Name                      | Status  |
 | ------------------------- |:-------:|
 | current_time              | :white_check_mark: |
-| publication_time          | Missing |
+| publication_time          | :white_check_mark: |
 | is_feature_activated      | :white_check_mark: |
 | get_sender                | :white_check_mark: |
 | get_block_num             | Missing |

@@ -185,7 +185,7 @@ func (a *applyContext) execOne() error {
 			}
 
 			a.TrxContext.PauseBillingTimer()
-			module := wasm.NewWasmExecutionContext(context.Background(), a.Control, a, a.Authorization, a.GetMutableResourceLimitsManager(), a.Idx64, a.Idx128, a.Idx256, a.IdxDouble, a.IdxLongDouble)
+			module := wasm.NewWasmExecutionContext(context.Background(), a.Control, a.TrxContext, a, a.Authorization, a.GetMutableResourceLimitsManager(), a.Idx64, a.Idx128, a.Idx256, a.IdxDouble, a.IdxLongDouble)
 
 			// Run the WASM contract
 			if err := module.Exec(receiverAccount.Code); err != nil {

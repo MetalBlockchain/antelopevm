@@ -16,6 +16,7 @@ var _ wasmApi.Context = &ExecutionContext{}
 type ExecutionContext struct {
 	memory                api.Memory
 	controller            wasmApi.Controller
+	transactionContext    wasmApi.TransactionContext
 	applyContext          wasmApi.ApplyContext
 	authorizationManager  wasmApi.AuthorizationManager
 	resourceLimitsManager wasmApi.ResourceLimitsManager
@@ -28,6 +29,7 @@ type ExecutionContext struct {
 
 func NewWasmExecutionContext(context context.Context,
 	controller wasmApi.Controller,
+	transactionContext wasmApi.TransactionContext,
 	applyContext wasmApi.ApplyContext,
 	authorizationManager wasmApi.AuthorizationManager,
 	resourceLimitsManager wasmApi.ResourceLimitsManager,
@@ -39,6 +41,7 @@ func NewWasmExecutionContext(context context.Context,
 ) *ExecutionContext {
 	return &ExecutionContext{
 		controller:            controller,
+		transactionContext:    transactionContext,
 		applyContext:          applyContext,
 		authorizationManager:  authorizationManager,
 		resourceLimitsManager: resourceLimitsManager,
@@ -112,6 +115,10 @@ func (c *ExecutionContext) GetMemorySize() uint32 {
 
 func (c *ExecutionContext) GetController() wasmApi.Controller {
 	return c.controller
+}
+
+func (c *ExecutionContext) GetTransactionContext() wasmApi.TransactionContext {
+	return c.transactionContext
 }
 
 func (c *ExecutionContext) GetApplyContext() wasmApi.ApplyContext {

@@ -6,6 +6,7 @@ import (
 
 func init() {
 	Functions["current_time"] = currentTime
+	Functions["publication_time"] = publicationTime
 	Functions["is_feature_activated"] = isFeatureActivated
 	Functions["get_sender"] = getSender
 }
@@ -15,6 +16,14 @@ func currentTime(context Context) interface{} {
 		currentTime := core.Now().TimeSinceEpoch().Count()
 
 		return uint64(currentTime)
+	}
+}
+
+func publicationTime(context Context) interface{} {
+	return func() uint64 {
+		published := context.GetTransactionContext().GetPublicationTime().TimeSinceEpoch().Count()
+
+		return uint64(published)
 	}
 }
 
