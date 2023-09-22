@@ -9,6 +9,7 @@ import (
 )
 
 type Controller interface {
+	GetActiveProducers() ([]name.Name, error)
 }
 
 type AuthorizationManager interface {

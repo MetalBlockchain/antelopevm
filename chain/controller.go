@@ -291,3 +291,8 @@ func (c *Controller) PendingBlockTime() core.TimePoint {
 func (c *Controller) GetChainId() core.ChainIdType {
 	return c.ChainId
 }
+
+// Only eosio for now
+func (c *Controller) GetActiveProducers() ([]name.Name, error) {
+	return []name.Name{config.SystemAccountName}, nil
+}
