@@ -26,14 +26,14 @@ type GetBlockInfoResponse struct {
 
 func NewGetBlockInfoResponse(block *state.Block) GetBlockInfoResponse {
 	return GetBlockInfoResponse{
-		Timestamp:      block.Header.Created.String(),
+		Timestamp:      block.Header.Timestamp.ToTimePoint().String(),
 		Producer:       "eosio",
 		Confirmed:      1,
-		Previous:       block.Header.PreviousBlockHash.Hex(),
+		Previous:       block.Header.Previous.String(),
 		ID:             block.Hash.Hex(),
-		BlockNum:       block.Header.Index,
-		RefBlockNum:    block.Header.Index,
-		RefBlockPrefix: block.Header.Index,
+		BlockNum:       uint64(block.Header.BlockNum()),
+		RefBlockNum:    uint64(block.Header.BlockNum()),
+		RefBlockPrefix: uint64(block.Header.BlockNum()),
 	}
 }
 

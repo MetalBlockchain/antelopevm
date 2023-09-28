@@ -1,7 +1,7 @@
 package api
 
 import (
-	"github.com/MetalBlockchain/antelopevm/core"
+	"github.com/MetalBlockchain/antelopevm/chain/transaction"
 	"github.com/MetalBlockchain/antelopevm/crypto/rlp"
 	"github.com/MetalBlockchain/antelopevm/utils"
 )
@@ -94,7 +94,7 @@ func getAction(context Context) interface{} {
 			panic("could not unpack transaction")
 		}
 
-		var action *core.Action
+		var action *transaction.Action
 
 		if actionType == 0 {
 			if int(index) >= len(trx.ContextFreeActions) {

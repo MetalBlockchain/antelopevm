@@ -5,34 +5,23 @@ package client
 
 import (
 	"context"
-
-	"github.com/MetalBlockchain/metalgo/ids"
-	"github.com/MetalBlockchain/metalgo/utils/rpc"
 )
 
 // Client defines timestampvm client operations.
 type Client interface {
 	// ProposeBlock submits data for a block
-	ProposeBlock(ctx context.Context) (bool, error)
-
-	// GetBlock fetches the contents of a block
-	GetBlock(ctx context.Context, blockID *ids.ID) (bool, error)
+	PushTransaction(ctx context.Context) (bool, error)
 }
 
 // New creates a new client object.
 func New(uri string) Client {
-	req := rpc.NewEndpointRequester(uri)
-	return &client{req: req}
+	return &client{uri: uri}
 }
 
 type client struct {
-	req rpc.EndpointRequester
+	uri string
 }
 
-func (cli *client) ProposeBlock(ctx context.Context) (bool, error) {
-	return true, nil
-}
-
-func (cli *client) GetBlock(ctx context.Context, blockID *ids.ID) (bool, error) {
+func (cli *client) PushTransaction(ctx context.Context) (bool, error) {
 	return true, nil
 }

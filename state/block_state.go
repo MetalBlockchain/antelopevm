@@ -1,7 +1,8 @@
 package state
 
 import (
-	"github.com/MetalBlockchain/antelopevm/core"
+	"github.com/MetalBlockchain/antelopevm/chain/block"
+	"github.com/MetalBlockchain/antelopevm/chain/types"
 	"github.com/MetalBlockchain/metalgo/ids"
 	"github.com/MetalBlockchain/metalgo/snow/choices"
 )
@@ -15,7 +16,7 @@ var (
 	lastAcceptedKey = []byte("lastAccepted")
 )
 
-func (s *Session) FindBlock(id core.IdType) (*Block, error) {
+func (s *Session) FindBlock(id types.IdType) (*Block, error) {
 	key := getObjectKeyByIndex(&Block{Index: id}, "id")
 	item, err := s.transaction.Get(key)
 
@@ -30,8 +31,7 @@ func (s *Session) FindBlock(id core.IdType) (*Block, error) {
 	}
 
 	out := &Block{}
-
-	if _, err := out.UnmarshalMsg(data); err != nil {
+	if _, err := Codec.Unmarshal(data, out); err != nil {
 		return nil, err
 	}
 
@@ -39,10 +39,10 @@ func (s *Session) FindBlock(id core.IdType) (*Block, error) {
 }
 
 func (s *Session) FindBlockByIndex(index uint64) (*Block, error) {
-	return s.FindBlock(core.IdType(index))
+	return s.FindBlock(types.IdType(index))
 }
 
-func (s *Session) FindBlockByHash(hash core.BlockHash) (*Block, error) {
+func (s *Session) FindBlockByHash(hash block.BlockHash) (*Block, error) {
 	key := getObjectKeyByIndex(&Block{Hash: hash}, "byHash")
 	item, err := s.transaction.Get(key)
 
@@ -56,11 +56,11 @@ func (s *Session) FindBlockByHash(hash core.BlockHash) (*Block, error) {
 		return nil, err
 	}
 
-	return s.FindBlock(core.NewIdType(data))
+	return s.FindBlock(types.NewIdType(data))
 }
 
 func (s *Session) CreateBlock(in *Block) error {
-	in.Index = core.IdType(in.Header.Index)
+	in.Index = types.IdType(in.Header.BlockNum())
 
 	return s.create(false, nil, in)
 }

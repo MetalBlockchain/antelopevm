@@ -1,8 +1,8 @@
 package chain
 
 import (
-	"github.com/MetalBlockchain/antelopevm/core/authority"
-	"github.com/MetalBlockchain/antelopevm/core/name"
+	"github.com/MetalBlockchain/antelopevm/chain/authority"
+	"github.com/MetalBlockchain/antelopevm/chain/name"
 )
 
 type NewAccount struct {

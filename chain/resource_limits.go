@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/MetalBlockchain/antelopevm/chain/name"
+	"github.com/MetalBlockchain/antelopevm/chain/resource"
 	"github.com/MetalBlockchain/antelopevm/config"
-	"github.com/MetalBlockchain/antelopevm/core/name"
-	"github.com/MetalBlockchain/antelopevm/core/resource"
 	"github.com/MetalBlockchain/antelopevm/state"
 	wasmApi "github.com/MetalBlockchain/antelopevm/wasm/api"
 )

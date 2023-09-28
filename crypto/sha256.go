@@ -10,7 +10,6 @@ import (
 	"github.com/MetalBlockchain/antelopevm/crypto/rlp"
 )
 
-//go:generate msgp
 type Sha256 struct {
 	Hash [4]uint64 `serialize:"true" eos:"array"`
 }
@@ -162,4 +161,8 @@ func Sha256Compare(a, b Sha256) int {
 
 func (h Sha256) IsEmpty() bool {
 	return len(h.Hash) == 0
+}
+
+func (h Sha256) IsZero() bool {
+	return h.Equals(NewSha256Nil())
 }

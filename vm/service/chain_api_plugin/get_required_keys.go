@@ -4,15 +4,15 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/MetalBlockchain/antelopevm/core"
+	"github.com/MetalBlockchain/antelopevm/chain/transaction"
 	"github.com/MetalBlockchain/antelopevm/crypto/ecc"
 	"github.com/MetalBlockchain/antelopevm/vm/service"
 	"github.com/gin-gonic/gin"
 )
 
 type RequiredKeysRequest struct {
-	Transaction   core.Transaction `json:"transaction"`
-	AvailableKeys []ecc.PublicKey  `json:"available_keys"`
+	Transaction   transaction.Transaction `json:"transaction"`
+	AvailableKeys []ecc.PublicKey         `json:"available_keys"`
 }
 
 type RequiredKeysResponse struct {

@@ -1,7 +1,7 @@
 package api
 
 import (
-	"github.com/MetalBlockchain/antelopevm/core"
+	"github.com/MetalBlockchain/antelopevm/chain/time"
 )
 
 func init() {
@@ -13,7 +13,7 @@ func init() {
 
 func currentTime(context Context) interface{} {
 	return func() uint64 {
-		currentTime := core.Now().TimeSinceEpoch().Count()
+		currentTime := time.Now().TimeSinceEpoch().Count()
 
 		return uint64(currentTime)
 	}

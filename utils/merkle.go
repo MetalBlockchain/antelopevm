@@ -28,7 +28,7 @@ func MakeCanonicalPair(l crypto.Sha256, r crypto.Sha256) Pair[crypto.Sha256, cry
 	}
 }
 
-func Merkle(hashes []crypto.Sha256) *crypto.Sha256 {
+func Merkle(hashes []crypto.Sha256) crypto.Sha256 {
 	if len(hashes) == 0 {
 		return crypto.NewSha256Nil()
 	}
@@ -45,5 +45,5 @@ func Merkle(hashes []crypto.Sha256) *crypto.Sha256 {
 		hashes = hashes[:len(hashes)/2]
 	}
 
-	return &hashes[0]
+	return hashes[0]
 }

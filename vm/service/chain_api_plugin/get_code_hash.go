@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/MetalBlockchain/antelopevm/core/name"
+	"github.com/MetalBlockchain/antelopevm/chain/name"
 	"github.com/MetalBlockchain/antelopevm/crypto"
 	"github.com/MetalBlockchain/antelopevm/vm/service"
 	"github.com/gin-gonic/gin"
@@ -39,13 +39,13 @@ func GetCodeHash(vm service.VM) gin.HandlerFunc {
 		json.NewDecoder(c.Request.Body).Decode(&body)
 		session := vm.GetState().CreateSession(false)
 		defer session.Discard()
-		acc, err := session.FindAccountByName(name.StringToName(body.AccountName))
+		acc, err := session.FindAccountMetaDataByName(name.StringToName(body.AccountName))
 
 		if err != nil {
 			c.JSON(400, "account not found")
 			return
 		}
 
-		c.JSON(200, GetCodeHashResponse{AccountName: body.AccountName, CodeHash: acc.CodeVersion})
+		c.JSON(200, GetCodeHashResponse{AccountName: body.AccountName, CodeHash: acc.CodeHash})
 	}
 }

@@ -1,12 +1,12 @@
 package state
 
 import (
-	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/MetalBlockchain/antelopevm/core/transaction"
+	"github.com/MetalBlockchain/antelopevm/chain/transaction"
+	"github.com/MetalBlockchain/antelopevm/chain/types"
 )
 
-func (s *Session) FindTransaction(id core.IdType) (*core.TransactionTrace, error) {
-	key := getObjectKeyByIndex(&core.TransactionTrace{ID: id}, "id")
+func (s *Session) FindTransaction(id types.IdType) (*transaction.TransactionTrace, error) {
+	key := getObjectKeyByIndex(&transaction.TransactionTrace{ID: id}, "id")
 	item, err := s.transaction.Get(key)
 
 	if err != nil {
@@ -19,9 +19,9 @@ func (s *Session) FindTransaction(id core.IdType) (*core.TransactionTrace, error
 		return nil, err
 	}
 
-	out := &core.TransactionTrace{}
+	out := &transaction.TransactionTrace{}
 
-	if _, err := out.UnmarshalMsg(data); err != nil {
+	if _, err := Codec.Unmarshal(data, out); err != nil {
 		return nil, err
 	}
 

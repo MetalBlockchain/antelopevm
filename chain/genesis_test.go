@@ -1,25 +1,19 @@
-package chain
+package chain_test
 
 import (
-	"encoding/json"
-	"fmt"
 	"os"
 	"testing"
 
+	"github.com/MetalBlockchain/antelopevm/chain"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestComputeChainId(t *testing.T) {
-	genesisFile, _ := os.ReadFile("./genesis_test.json")
-	genesis := &GenesisFile{}
-	json.Unmarshal(genesisFile, genesis)
-	hash := genesis.GetChainId()
-	assert.Equal(t, hash.String(), "e771944f7015cfb2fafcb687181d373051ebdbf7396045bd0199cf783b2397e6")
-}
-
-func TestInitialKey(t *testing.T) {
-	genesisFile, _ := os.ReadFile("./genesis_test.json")
-	genesis := &GenesisFile{}
-	json.Unmarshal(genesisFile, genesis)
-	fmt.Printf("genesis.InitialKey: %v\n", genesis.InitialKey.Valid())
+	genesisFile, err := os.ReadFile("./genesis_test.json")
+	assert.NoError(t, err)
+	genesis, err := chain.ParseGenesisData(genesisFile)
+	assert.NoError(t, err)
+	hash, err := genesis.ComputeChainId()
+	assert.NoError(t, err)
+	assert.Equal(t, hash.String(), "384da888112027f0321850a169f737c33e53b388aad48b5adace4bab97f437e0") // XPR Network ID
 }

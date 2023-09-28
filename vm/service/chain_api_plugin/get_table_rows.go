@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/MetalBlockchain/antelopevm/abi"
-	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/MetalBlockchain/antelopevm/core/name"
+	"github.com/MetalBlockchain/antelopevm/chain/abi"
+	"github.com/MetalBlockchain/antelopevm/chain/name"
+	"github.com/MetalBlockchain/antelopevm/chain/table"
 	"github.com/MetalBlockchain/antelopevm/vm/service"
 	"github.com/gin-gonic/gin"
-	"github.com/inconshreveable/log15"
+	log "github.com/inconshreveable/log15"
 )
 
 type GetTableRowsRequest struct {
@@ -67,15 +67,15 @@ func GetTableRows(vm service.VM) gin.HandlerFunc {
 			return
 		}
 
-		table, err := session.FindTableByCodeScopeTable(body.Code, body.Scope, body.Table)
+		tab, err := session.FindTableByCodeScopeTable(body.Code, body.Scope, body.Table)
 
 		if err != nil {
 			c.JSON(400, service.NewError(400, "failed to find table"))
 			return
 		}
 
-		keyValues := make([]*core.KeyValue, 0)
-		keyValueIterator := session.FindKeyValuesByScope(table.ID)
+		keyValues := make([]*table.KeyValue, 0)
+		keyValueIterator := session.FindKeyValuesByScope(tab.ID)
 		defer keyValueIterator.Close()
 
 		for keyValueIterator.Rewind(); keyValueIterator.Valid(); keyValueIterator.Next() {
@@ -96,10 +96,10 @@ func GetTableRows(vm service.VM) gin.HandlerFunc {
 						Payer: keyValue.Payer.String(),
 					})
 				} else {
-					log15.Error("failed to encode json", "err", err)
+					log.Error("failed to encode json", "err", err)
 				}
 			} else {
-				log15.Error("failed to decode struct", "err", err)
+				log.Error("failed to decode struct", "err", err)
 			}
 		}
 

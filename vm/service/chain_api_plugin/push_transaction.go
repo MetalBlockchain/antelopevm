@@ -4,14 +4,14 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/MetalBlockchain/antelopevm/core"
+	"github.com/MetalBlockchain/antelopevm/chain/transaction"
 	"github.com/MetalBlockchain/antelopevm/vm/service"
 	"github.com/gin-gonic/gin"
 )
 
 type PushTransactionResults struct {
-	TransactionId string                `json:"transaction_id"`
-	Processed     core.TransactionTrace `json:"processed"`
+	TransactionId string                       `json:"transaction_id"`
+	Processed     transaction.TransactionTrace `json:"processed"`
 }
 
 func init() {
@@ -27,7 +27,7 @@ func init() {
 
 func PushTransaction(vm service.VM) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var trx core.PackedTransaction
+		var trx transaction.PackedTransaction
 
 		if err := json.NewDecoder(c.Request.Body).Decode(&trx); err != nil {
 			c.JSON(400, "failed to decode body")
@@ -39,16 +39,18 @@ func PushTransaction(vm service.VM) gin.HandlerFunc {
 			return
 		}
 
+		id, _ := trx.ID()
+
 		c.JSON(202, PushTransactionResults{
-			TransactionId: trx.Id.String(),
-			Processed: core.TransactionTrace{
-				Hash: trx.Id,
-				Receipt: core.TransactionReceipt{
-					TransactionReceiptHeader: core.TransactionReceiptHeader{
-						Status: core.TransactionStatusExecuted,
+			TransactionId: id.String(),
+			Processed: transaction.TransactionTrace{
+				Hash: *id,
+				Receipt: transaction.TransactionReceipt{
+					TransactionReceiptHeader: transaction.TransactionReceiptHeader{
+						Status: transaction.TransactionStatusExecuted,
 					},
 				},
-				ActionTraces: make([]core.ActionTrace, 0),
+				ActionTraces: make([]transaction.ActionTrace, 0),
 			},
 		})
 	}

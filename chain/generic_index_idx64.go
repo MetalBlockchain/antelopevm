@@ -3,10 +3,9 @@ package chain
 import (
 	"fmt"
 
-	"github.com/MetalBlockchain/antelopevm/core/contract"
-	"github.com/MetalBlockchain/antelopevm/core/name"
+	"github.com/MetalBlockchain/antelopevm/chain/name"
+	"github.com/MetalBlockchain/antelopevm/chain/table"
 	wasmApi "github.com/MetalBlockchain/antelopevm/wasm/api"
-	"github.com/inconshreveable/log15"
 )
 
 var (
@@ -23,14 +22,14 @@ func (i *Idx64) Store(scope name.ScopeName, tableName name.TableName, payer name
 		return -1, errInvalidTablePayer
 	}
 
-	table, err := i.Context.FindOrCreateTable(i.Context.Receiver, scope, tableName, payer)
+	tab, err := i.Context.FindOrCreateTable(i.Context.Receiver, scope, tableName, payer)
 
 	if err != nil {
 		return -1, err
 	}
 
-	obj := &contract.Index64Object{
-		TableID:      table.ID,
+	obj := &table.Index64Object{
+		TableID:      tab.ID,
 		PrimaryKey:   primaryKey,
 		Payer:        payer,
 		SecondaryKey: secondaryKey,
@@ -40,13 +39,13 @@ func (i *Idx64) Store(scope name.ScopeName, tableName name.TableName, payer name
 		return -1, err
 	}
 
-	if err := i.Context.Session.ModifyTable(table, func() {
-		table.Count++
+	if err := i.Context.Session.ModifyTable(tab, func() {
+		tab.Count++
 	}); err != nil {
 		return -1, err
 	}
 
-	i.Context.KeyValueCache.cacheTable(table)
+	i.Context.KeyValueCache.cacheTable(tab)
 
 	iterator := i.Context.KeyValueCache.add(obj)
 
@@ -54,7 +53,7 @@ func (i *Idx64) Store(scope name.ScopeName, tableName name.TableName, payer name
 }
 
 func (i *Idx64) Remove(iterator int) error {
-	obj, ok := i.Context.KeyValueCache.get(iterator).(*contract.Index64Object)
+	obj, ok := i.Context.KeyValueCache.get(iterator).(*table.Index64Object)
 
 	if !ok {
 		return fmt.Errorf("could not cast value to")
@@ -88,7 +87,7 @@ func (i *Idx64) Remove(iterator int) error {
 }
 
 func (i *Idx64) Update(iterator int, payer name.AccountName, secondaryKey uint64) error {
-	obj, ok := i.Context.KeyValueCache.get(iterator).(*contract.Index64Object)
+	obj, ok := i.Context.KeyValueCache.get(iterator).(*table.Index64Object)
 
 	if !ok {
 		return fmt.Errorf("could not cast value to")
@@ -191,7 +190,7 @@ func (i *Idx64) NextSecondary(iterator int, primaryKey *uint64) (int, error) {
 		return -1, nil // cannot increment past end iterator of index
 	}
 
-	obj := i.Context.KeyValueCache.get(iterator).(*contract.Index64Object)
+	obj := i.Context.KeyValueCache.get(iterator).(*table.Index64Object)
 	nextObj, err := i.Context.Session.NextSecondaryIndex64(obj)
 
 	if err != nil || nextObj.TableID != obj.TableID {
@@ -222,10 +221,8 @@ func (i *Idx64) PreviousSecondary(iterator int, primaryKey *uint64) (int, error)
 		return i.Context.KeyValueCache.add(obj), nil
 	}
 
-	obj := i.Context.KeyValueCache.get(iterator).(*contract.Index64Object)
+	obj := i.Context.KeyValueCache.get(iterator).(*table.Index64Object)
 	previousObj, err := i.Context.Session.PreviousSecondaryIndex64(obj)
-
-	log15.Info("previous", "g", previousObj, "obj", obj)
 
 	if err != nil || previousObj.TableID != obj.TableID || previousObj.SecondaryKey > obj.SecondaryKey {
 		return -1, nil
@@ -249,8 +246,6 @@ func (i *Idx64) FindPrimary(code name.AccountName, scope name.ScopeName, tableNa
 	if err != nil {
 		return endIterator
 	}
-
-	log15.Info("g", "g", obj)
 
 	*secondaryKey = obj.SecondaryKey
 
@@ -296,7 +291,7 @@ func (i *Idx64) NextPrimary(iterator int, primaryKey *uint64) (int, error) {
 		return -1, nil // cannot increment past end iterator of index
 	}
 
-	obj := i.Context.KeyValueCache.get(iterator).(*contract.Index64Object)
+	obj := i.Context.KeyValueCache.get(iterator).(*table.Index64Object)
 	nextObj, err := i.Context.Session.NextPrimaryIndex64(obj)
 
 	if err != nil || nextObj.TableID != obj.TableID {
@@ -327,7 +322,7 @@ func (i *Idx64) PreviousPrimary(iterator int, primaryKey *uint64) (int, error) {
 		return i.Context.KeyValueCache.add(obj), nil
 	}
 
-	obj := i.Context.KeyValueCache.get(iterator).(*contract.Index64Object)
+	obj := i.Context.KeyValueCache.get(iterator).(*table.Index64Object)
 	previousObj, err := i.Context.Session.PreviousPrimaryIndex64(obj)
 
 	if err != nil || previousObj.TableID != obj.TableID {

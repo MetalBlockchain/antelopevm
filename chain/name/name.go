@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/MetalBlockchain/antelopevm/crypto/rlp"
+	"github.com/hashicorp/go-set"
 )
 
 type Name uint64
@@ -37,8 +38,7 @@ func (n *Name) Unpack(in []byte) (rlp.Unpack, error) {
 	}
 
 	data := in[:8]
-	out := binary.LittleEndian.Uint64(data)
-	fmt.Println(Name(out))
+	*n = Name(binary.LittleEndian.Uint64(data))
 	return nil, nil
 }
 
@@ -56,6 +56,10 @@ func CompareName(first interface{}, second interface{}) int {
 
 func (n Name) Empty() bool {
 	return n == 0
+}
+
+func (n Name) Hash() string {
+	return n.String()
 }
 
 func (n Name) MarshalJSON() ([]byte, error) {
@@ -134,3 +138,9 @@ func charToSymbol(c byte) uint64 {
 }
 
 var base32Alphabet = []byte(".12345abcdefghijklmnopqrstuvwxyz")
+
+type NameSet = *set.HashSet[Name, string]
+
+func NewNameSet(capacity int) NameSet {
+	return set.NewHashSet[Name, string](capacity)
+}

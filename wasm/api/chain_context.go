@@ -1,10 +1,11 @@
 package api
 
 import (
-	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/MetalBlockchain/antelopevm/core/account"
-	"github.com/MetalBlockchain/antelopevm/core/authority"
-	"github.com/MetalBlockchain/antelopevm/core/name"
+	"github.com/MetalBlockchain/antelopevm/chain/account"
+	"github.com/MetalBlockchain/antelopevm/chain/authority"
+	"github.com/MetalBlockchain/antelopevm/chain/name"
+	"github.com/MetalBlockchain/antelopevm/chain/time"
+	"github.com/MetalBlockchain/antelopevm/chain/transaction"
 	"github.com/MetalBlockchain/antelopevm/crypto/ecc"
 )
 
@@ -13,13 +14,13 @@ type Controller interface {
 }
 
 type AuthorizationManager interface {
-	GetPermission(level authority.PermissionLevel) (*core.Permission, error)
-	CheckAuthorization(actions []*core.Action, keys ecc.PublicKeySet, providedPermissions []authority.PermissionLevel, allowUnusedKeys bool, satisfiedAuthorizations authority.PermissionLevelSet) error
+	GetPermission(level authority.PermissionLevel) (*authority.Permission, error)
+	CheckAuthorization(actions []*transaction.Action, keys ecc.PublicKeySet, providedPermissions []authority.PermissionLevel, allowUnusedKeys bool, satisfiedAuthorizations authority.PermissionLevelSet) error
 	CheckAuthorizationByPermissionLevel(account name.AccountName, permission name.PermissionName, keys ecc.PublicKeySet, providedPermissions []authority.PermissionLevel, allowUnusedKeys bool) error
 }
 
 type TransactionContext interface {
-	GetPublicationTime() core.TimePoint
+	GetPublicationTime() time.TimePoint
 }
 
 type ApplyContext interface {
@@ -31,7 +32,7 @@ type ApplyContext interface {
 	IsAccount(account name.AccountName) bool
 	GetSender() (*name.ActionName, error)
 
-	GetAction() core.Action
+	GetAction() transaction.Action
 	GetReceiver() name.AccountName
 
 	// Database functions
@@ -50,10 +51,10 @@ type ApplyContext interface {
 	ConsoleAppend(value string)
 
 	SetActionReturnValue(value []byte)
-	GetPackedTransaction() *core.PackedTransaction
+	GetPackedTransaction() *transaction.PackedTransaction
 
 	// Transaction functions
-	ExecuteInline(action core.Action) error
+	ExecuteInline(action transaction.Action) error
 
 	IsContextPrivileged() bool
 	IsPrivileged(name name.AccountName) (bool, error)

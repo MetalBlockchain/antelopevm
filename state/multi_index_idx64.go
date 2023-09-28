@@ -1,17 +1,17 @@
 package state
 
 import (
-	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/MetalBlockchain/antelopevm/core/contract"
+	"github.com/MetalBlockchain/antelopevm/chain/table"
+	"github.com/MetalBlockchain/antelopevm/chain/types"
 	"github.com/dgraph-io/badger/v3"
 )
 
-func (s *Session) FindIdx64Object(id core.IdType) (*contract.Index64Object, error) {
+func (s *Session) FindIdx64Object(id types.IdType) (*table.Index64Object, error) {
 	if obj, found := s.indexObjectCache.Get(id); found {
-		return obj.(*contract.Index64Object), nil
+		return obj.(*table.Index64Object), nil
 	}
 
-	key := getObjectKeyByIndex(&contract.Index64Object{ID: id}, "id")
+	key := getObjectKeyByIndex(&table.Index64Object{ID: id}, "id")
 	item, err := s.transaction.Get(key)
 
 	if err != nil {
@@ -24,9 +24,8 @@ func (s *Session) FindIdx64Object(id core.IdType) (*contract.Index64Object, erro
 		return nil, err
 	}
 
-	out := &contract.Index64Object{}
-
-	if _, err := out.UnmarshalMsg(data); err != nil {
+	out := &table.Index64Object{}
+	if _, err := Codec.Unmarshal(data, out); err != nil {
 		return nil, err
 	}
 
@@ -35,8 +34,8 @@ func (s *Session) FindIdx64Object(id core.IdType) (*contract.Index64Object, erro
 	return out, nil
 }
 
-func (s *Session) FindIdx64ObjectBySecondary(tableId core.IdType, secondaryKey uint64) (*contract.Index64Object, error) {
-	key := getPartialKey("bySecondary", &contract.Index64Object{}, tableId, secondaryKey)
+func (s *Session) FindIdx64ObjectBySecondary(tableId types.IdType, secondaryKey uint64) (*table.Index64Object, error) {
+	key := getPartialKey("bySecondary", &table.Index64Object{}, tableId, secondaryKey)
 	opts := badger.DefaultIteratorOptions
 	opts.Prefix = key
 	iterator := s.transaction.NewIterator(opts)
@@ -50,14 +49,14 @@ func (s *Session) FindIdx64ObjectBySecondary(tableId core.IdType, secondaryKey u
 			return nil, err
 		}
 
-		return s.FindIdx64Object(core.NewIdType(key))
+		return s.FindIdx64Object(types.NewIdType(key))
 	}
 
 	return nil, badger.ErrKeyNotFound
 }
 
-func (s *Session) FindIdx64ObjectByPrimary(tableId core.IdType, primaryKey uint64) (*contract.Index64Object, error) {
-	key := getObjectKeyByIndex(&contract.Index64Object{TableID: tableId, PrimaryKey: primaryKey}, "byPrimary")
+func (s *Session) FindIdx64ObjectByPrimary(tableId types.IdType, primaryKey uint64) (*table.Index64Object, error) {
+	key := getObjectKeyByIndex(&table.Index64Object{TableID: tableId, PrimaryKey: primaryKey}, "byPrimary")
 	opts := badger.DefaultIteratorOptions
 	opts.Prefix = key
 	iterator := s.transaction.NewIterator(opts)
@@ -71,14 +70,14 @@ func (s *Session) FindIdx64ObjectByPrimary(tableId core.IdType, primaryKey uint6
 			return nil, err
 		}
 
-		return s.FindIdx64Object(core.NewIdType(key))
+		return s.FindIdx64Object(types.NewIdType(key))
 	}
 
 	return nil, badger.ErrKeyNotFound
 }
 
-func (s *Session) CreateIdx64Object(in *contract.Index64Object) error {
-	err := s.create(true, func(id core.IdType) error {
+func (s *Session) CreateIdx64Object(in *table.Index64Object) error {
+	err := s.create(true, func(id types.IdType) error {
 		in.ID = id
 		return nil
 	}, in)
@@ -92,7 +91,7 @@ func (s *Session) CreateIdx64Object(in *contract.Index64Object) error {
 	return nil
 }
 
-func (s *Session) ModifyIndex64Object(in *contract.Index64Object, modifyFunc func()) error {
+func (s *Session) ModifyIndex64Object(in *table.Index64Object, modifyFunc func()) error {
 	if err := s.modify(in, modifyFunc); err != nil {
 		return err
 	}
@@ -102,7 +101,7 @@ func (s *Session) ModifyIndex64Object(in *contract.Index64Object, modifyFunc fun
 	return nil
 }
 
-func (s *Session) RemoveIndex64Object(in *contract.Index64Object) error {
+func (s *Session) RemoveIndex64Object(in *table.Index64Object) error {
 	if err := s.remove(in); err != nil {
 		return err
 	}
@@ -112,11 +111,11 @@ func (s *Session) RemoveIndex64Object(in *contract.Index64Object) error {
 	return nil
 }
 
-func (s *Session) LowerboundSecondaryIndex64(tableId core.IdType, secondary uint64) (*contract.Index64Object, error) {
-	requiredPrefix := getPartialKey("bySecondary", &contract.Index64Object{}, tableId)
-	prefix := getPartialKey("bySecondary", &contract.Index64Object{}, tableId, secondary)
-	iterator := newIterator(s, requiredPrefix, func(b []byte) (*contract.Index64Object, error) {
-		return s.FindIdx64Object(core.NewIdType(b))
+func (s *Session) LowerboundSecondaryIndex64(tableId types.IdType, secondary uint64) (*table.Index64Object, error) {
+	requiredPrefix := getPartialKey("bySecondary", &table.Index64Object{}, tableId)
+	prefix := getPartialKey("bySecondary", &table.Index64Object{}, tableId, secondary)
+	iterator := newIterator(s, requiredPrefix, func(b []byte) (*table.Index64Object, error) {
+		return s.FindIdx64Object(types.NewIdType(b))
 	})
 	defer iterator.Close()
 	iterator.Seek(prefix)
@@ -128,11 +127,11 @@ func (s *Session) LowerboundSecondaryIndex64(tableId core.IdType, secondary uint
 	return nil, badger.ErrKeyNotFound
 }
 
-func (s *Session) UpperboundSecondaryIndex64(values ...interface{}) (*contract.Index64Object, error) {
-	requiredPrefix := getPartialKey("bySecondary", &contract.Index64Object{}, values[:len(values)-1]...)
-	prefix := getPartialKey("bySecondary", &contract.Index64Object{}, values...)
-	iterator := newIterator(s, requiredPrefix, func(b []byte) (*contract.Index64Object, error) {
-		return s.FindIdx64Object(core.NewIdType(b))
+func (s *Session) UpperboundSecondaryIndex64(values ...interface{}) (*table.Index64Object, error) {
+	requiredPrefix := getPartialKey("bySecondary", &table.Index64Object{}, values[:len(values)-1]...)
+	prefix := getPartialKey("bySecondary", &table.Index64Object{}, values...)
+	iterator := newIterator(s, requiredPrefix, func(b []byte) (*table.Index64Object, error) {
+		return s.FindIdx64Object(types.NewIdType(b))
 	})
 	defer iterator.Close()
 	iterator.Seek(prefix)
@@ -149,7 +148,7 @@ func (s *Session) UpperboundSecondaryIndex64(values ...interface{}) (*contract.I
 	return nil, badger.ErrKeyNotFound
 }
 
-func (s *Session) NextSecondaryIndex64(kv *contract.Index64Object) (*contract.Index64Object, error) {
+func (s *Session) NextSecondaryIndex64(kv *table.Index64Object) (*table.Index64Object, error) {
 	key := getObjectKeyByIndex(kv, "bySecondary")
 	opts := badger.DefaultIteratorOptions
 	opts.PrefetchSize = 2
@@ -165,10 +164,10 @@ func (s *Session) NextSecondaryIndex64(kv *contract.Index64Object) (*contract.In
 		return nil, err
 	}
 
-	return s.FindIdx64Object(core.NewIdType(data))
+	return s.FindIdx64Object(types.NewIdType(data))
 }
 
-func (s *Session) PreviousSecondaryIndex64(kv *contract.Index64Object) (*contract.Index64Object, error) {
+func (s *Session) PreviousSecondaryIndex64(kv *table.Index64Object) (*table.Index64Object, error) {
 	key := getObjectKeyByIndex(kv, "bySecondary")
 	opts := badger.DefaultIteratorOptions
 	opts.PrefetchSize = 2
@@ -185,7 +184,7 @@ func (s *Session) PreviousSecondaryIndex64(kv *contract.Index64Object) (*contrac
 		return nil, err
 	}
 
-	out, err := s.FindIdx64Object(core.NewIdType(data))
+	out, err := s.FindIdx64Object(types.NewIdType(data))
 
 	if err != nil {
 		return nil, err
@@ -194,10 +193,10 @@ func (s *Session) PreviousSecondaryIndex64(kv *contract.Index64Object) (*contrac
 	return out, nil
 }
 
-func (s *Session) LowerboundPrimaryIndex64(tableId core.IdType, primary uint64) (*contract.Index64Object, error) {
-	requiredPrefix := getPartialKey("byPrimary", &contract.Index64Object{}, tableId, primary)
-	iterator := newIterator(s, requiredPrefix, func(b []byte) (*contract.Index64Object, error) {
-		return s.FindIdx64Object(core.NewIdType(b))
+func (s *Session) LowerboundPrimaryIndex64(tableId types.IdType, primary uint64) (*table.Index64Object, error) {
+	requiredPrefix := getPartialKey("byPrimary", &table.Index64Object{}, tableId, primary)
+	iterator := newIterator(s, requiredPrefix, func(b []byte) (*table.Index64Object, error) {
+		return s.FindIdx64Object(types.NewIdType(b))
 	})
 	defer iterator.Close()
 	iterator.Seek(requiredPrefix)
@@ -209,10 +208,10 @@ func (s *Session) LowerboundPrimaryIndex64(tableId core.IdType, primary uint64) 
 	return nil, badger.ErrKeyNotFound
 }
 
-func (s *Session) UpperboundPrimaryIndex64(values ...interface{}) (*contract.Index64Object, error) {
-	requiredPrefix := getPartialKey("byPrimary", &contract.Index64Object{}, values...)
-	iterator := newReverseIterator(s, requiredPrefix, func(b []byte) (*contract.Index64Object, error) {
-		return s.FindIdx64Object(core.NewIdType(b))
+func (s *Session) UpperboundPrimaryIndex64(values ...interface{}) (*table.Index64Object, error) {
+	requiredPrefix := getPartialKey("byPrimary", &table.Index64Object{}, values...)
+	iterator := newReverseIterator(s, requiredPrefix, func(b []byte) (*table.Index64Object, error) {
+		return s.FindIdx64Object(types.NewIdType(b))
 	})
 	defer iterator.Close()
 	iterator.Seek(requiredPrefix)
@@ -224,7 +223,7 @@ func (s *Session) UpperboundPrimaryIndex64(values ...interface{}) (*contract.Ind
 	return nil, badger.ErrKeyNotFound
 }
 
-func (s *Session) NextPrimaryIndex64(kv *contract.Index64Object) (*contract.Index64Object, error) {
+func (s *Session) NextPrimaryIndex64(kv *table.Index64Object) (*table.Index64Object, error) {
 	key := getObjectKeyByIndex(kv, "byPrimary")
 	opts := badger.DefaultIteratorOptions
 	opts.PrefetchSize = 2
@@ -240,10 +239,10 @@ func (s *Session) NextPrimaryIndex64(kv *contract.Index64Object) (*contract.Inde
 		return nil, err
 	}
 
-	return s.FindIdx64Object(core.NewIdType(data))
+	return s.FindIdx64Object(types.NewIdType(data))
 }
 
-func (s *Session) PreviousPrimaryIndex64(kv *contract.Index64Object) (*contract.Index64Object, error) {
+func (s *Session) PreviousPrimaryIndex64(kv *table.Index64Object) (*table.Index64Object, error) {
 	key := getObjectKeyByIndex(kv, "byPrimary")
 	opts := badger.DefaultIteratorOptions
 	opts.PrefetchSize = 2
@@ -260,5 +259,5 @@ func (s *Session) PreviousPrimaryIndex64(kv *contract.Index64Object) (*contract.
 		return nil, err
 	}
 
-	return s.FindIdx64Object(core.NewIdType(data))
+	return s.FindIdx64Object(types.NewIdType(data))
 }

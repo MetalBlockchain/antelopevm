@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/MetalBlockchain/antelopevm/core/name"
+	"github.com/MetalBlockchain/antelopevm/chain/name"
 	"github.com/MetalBlockchain/antelopevm/crypto"
 	"github.com/MetalBlockchain/antelopevm/vm/service"
 	"github.com/gin-gonic/gin"
@@ -37,7 +37,6 @@ func GetRawAbi(vm service.VM) gin.HandlerFunc {
 		session := vm.GetState().CreateSession(false)
 		defer session.Discard()
 		acc, err := session.FindAccountByName(name.StringToName(body.AccountName))
-
 		if err != nil {
 			c.JSON(400, "account not found")
 			return
@@ -52,10 +51,16 @@ func GetRawAbi(vm service.VM) gin.HandlerFunc {
 			return
 		}
 
+		accountMetaData, err := session.FindAccountMetaDataByName(name.StringToName(body.AccountName))
+		if err != nil {
+			c.JSON(400, "account not found")
+			return
+		}
+
 		rawAbi := base64.StdEncoding.EncodeToString(acc.Abi)
 		response := GetRawAbiResponse{
 			AccountName: acc.Name.String(),
-			CodeHash:    acc.CodeVersion,
+			CodeHash:    accountMetaData.CodeHash,
 			AbiHash:     *crypto.NewSha256String("bf13acab1b4bc2676ef6f0afcf1765ab5db3ffa1ac18453a628e1e65fe26e045"),
 			Abi:         rawAbi,
 		}

@@ -3,10 +3,12 @@ package chain
 import (
 	"fmt"
 
+	"github.com/MetalBlockchain/antelopevm/chain/fc"
+	"github.com/MetalBlockchain/antelopevm/chain/name"
+	"github.com/MetalBlockchain/antelopevm/chain/time"
+	"github.com/MetalBlockchain/antelopevm/chain/transaction"
+	"github.com/MetalBlockchain/antelopevm/chain/types"
 	"github.com/MetalBlockchain/antelopevm/config"
-	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/MetalBlockchain/antelopevm/core/name"
-	"github.com/MetalBlockchain/antelopevm/core/transaction"
 	"github.com/MetalBlockchain/antelopevm/crypto"
 	"github.com/MetalBlockchain/antelopevm/state"
 	"github.com/MetalBlockchain/antelopevm/wasm/api"
@@ -16,56 +18,56 @@ var _ api.TransactionContext = &TransactionContext{}
 
 type TransactionContext struct {
 	Control                      *Controller
-	PackedTrx                    *core.PackedTransaction
-	ID                           core.TransactionIdType
+	PackedTrx                    *transaction.PackedTransaction
+	ID                           transaction.TransactionIdType
 	ApplyContextFree             bool
-	Trace                        *core.TransactionTrace
-	ActionId                     core.IdType
+	Trace                        *transaction.TransactionTrace
+	ActionId                     types.IdType
 	ExecutedActionReceiptDigests []crypto.Sha256
 	Session                      *state.Session
 	AuthorizationManager         AuthorizationManager
-	Deadline                     core.TimePoint
+	Deadline                     time.TimePoint
 	BilledCpuTimeUs              int64
 	ExplicitBilledCpuTime        bool
 
-	Published core.TimePoint
+	Published time.TimePoint
 
 	isInitialized bool
-	start         core.TimePoint
-	pseudoStart   core.TimePoint
-	billedTime    core.Microseconds
+	start         time.TimePoint
+	pseudoStart   time.TimePoint
+	billedTime    time.Microseconds
 	//billingTimerDurationLimit core.Microseconds
-	objectiveDurationLimit    core.Microseconds
-	deadline                  core.TimePoint
+	objectiveDurationLimit    time.Microseconds
+	deadline                  time.TimePoint
 	deadlineExceptionCode     int64
 	billingTimerExceptionCode int64
 	isInput                   bool
 }
 
-func NewTransactionContext(control *Controller, s *state.Session, t *core.PackedTransaction, trxId core.TransactionIdType, block *state.Block) *TransactionContext {
+func NewTransactionContext(control *Controller, s *state.Session, t *transaction.PackedTransaction, trxId transaction.TransactionIdType, block *state.Block) *TransactionContext {
 	tc := TransactionContext{
 		Control:               control,
 		PackedTrx:             t,
 		Session:               s,
 		AuthorizationManager:  *NewAuthorizationManager(control, s),
-		Deadline:              core.MaxTimePoint(),
+		Deadline:              time.MaxTimePoint(),
 		BilledCpuTimeUs:       0,
 		ExplicitBilledCpuTime: false,
 
 		isInitialized:             false,
-		start:                     core.Now(),
-		pseudoStart:               core.Now(),
-		billedTime:                core.Microseconds(0),
-		deadline:                  core.MaxTimePoint(),
+		start:                     time.Now(),
+		pseudoStart:               time.Now(),
+		billedTime:                time.Microseconds(0),
+		deadline:                  time.MaxTimePoint(),
 		deadlineExceptionCode:     BlockCpuUsageExceededException{}.Code(),
 		billingTimerExceptionCode: BlockCpuUsageExceededException{}.Code(),
 	}
 
-	tc.Trace = &core.TransactionTrace{
+	tc.Trace = &transaction.TransactionTrace{
 		Hash:         trxId,
-		BlockNum:     block.Header.Index,
-		BlockTime:    block.Header.Created,
-		ActionTraces: make([]core.ActionTrace, 0),
+		BlockNum:     uint64(block.Header.BlockNum()),
+		BlockTime:    block.Header.Timestamp.ToTimePoint(),
+		ActionTraces: make([]transaction.ActionTrace, 0),
 	}
 
 	return &tc
@@ -119,7 +121,9 @@ func (t *TransactionContext) InitForInputTransaction(packedTrxUnprunableSize uin
 		return err
 	}
 
-	return t.RecordTransaction(t.PackedTrx.Id, transaction.Expiration)
+	id, _ := t.PackedTrx.ID()
+
+	return t.RecordTransaction(*id, transaction.Expiration)
 }
 
 func (t *TransactionContext) Init(initialNetUsage uint64) error {
@@ -137,24 +141,24 @@ func (t *TransactionContext) Init(initialNetUsage uint64) error {
 		return fmt.Errorf("deferred transactions are deprecated")
 	}
 
-	t.objectiveDurationLimit = core.Microseconds(config.MaxBlockCpuUsage)
-	t.deadline = t.start + core.TimePoint(t.objectiveDurationLimit)
+	t.objectiveDurationLimit = time.Microseconds(config.MaxBlockCpuUsage)
+	t.deadline = t.start + time.TimePoint(t.objectiveDurationLimit)
 
 	// Possibly lower objective_duration_limit to the maximum cpu usage a transaction is allowed to be billed
 	if config.MaxTransactionCpuUsage <= uint32(t.objectiveDurationLimit.Count()) {
-		t.objectiveDurationLimit = core.Microseconds(config.MaxTransactionCpuUsage)
+		t.objectiveDurationLimit = time.Microseconds(config.MaxTransactionCpuUsage)
 		t.billingTimerExceptionCode = TxCpuUsageExceededException{}.Code()
-		t.deadline = t.start + core.TimePoint(t.objectiveDurationLimit)
+		t.deadline = t.start + time.TimePoint(t.objectiveDurationLimit)
 	}
 
 	// Possibly lower objective_duration_limit to optional limit set in transaction header
 	if transaction.MaxCpuUsageMS > 0 {
-		trxSpecifiedCpuUsageLimit := core.Milliseconds(int64(transaction.MaxCpuUsageMS))
+		trxSpecifiedCpuUsageLimit := time.Milliseconds(int64(transaction.MaxCpuUsageMS))
 
 		if trxSpecifiedCpuUsageLimit <= t.objectiveDurationLimit {
 			t.objectiveDurationLimit = trxSpecifiedCpuUsageLimit
 			t.billingTimerExceptionCode = TxCpuUsageExceededException{}.Code()
-			t.deadline = t.start + core.TimePoint(t.objectiveDurationLimit)
+			t.deadline = t.start + time.TimePoint(t.objectiveDurationLimit)
 		}
 	}
 
@@ -215,14 +219,14 @@ func (t *TransactionContext) ScheduleActionFromOrdinal(actionOrdinal int, receiv
 		return 0, err
 	}
 
-	t.Trace.ActionTraces = append(t.Trace.ActionTraces, *core.NewActionTrace(t.Trace, trace.Action, receiver, contextFree, core.Vuint32(newActionOrdinal), core.Vuint32(creatorActionOrdinal)))
+	t.Trace.ActionTraces = append(t.Trace.ActionTraces, *transaction.NewActionTrace(t.Trace, trace.Action, receiver, contextFree, fc.UnsignedInt(newActionOrdinal), fc.UnsignedInt(creatorActionOrdinal)))
 
 	return newActionOrdinal, nil
 }
 
-func (t *TransactionContext) ScheduleAction(action core.Action, receiver name.AccountName, contextFree bool, creatorActionOrdinal int) int {
+func (t *TransactionContext) ScheduleAction(action transaction.Action, receiver name.AccountName, contextFree bool, creatorActionOrdinal int) int {
 	newActionOrdinal := len(t.Trace.ActionTraces) + 1
-	actionTrace := core.NewActionTrace(t.Trace, action, receiver, contextFree, core.Vuint32(newActionOrdinal), core.Vuint32(creatorActionOrdinal))
+	actionTrace := transaction.NewActionTrace(t.Trace, action, receiver, contextFree, fc.UnsignedInt(newActionOrdinal), fc.UnsignedInt(creatorActionOrdinal))
 	t.Trace.ActionTraces = append(t.Trace.ActionTraces, *actionTrace)
 
 	return newActionOrdinal
@@ -242,7 +246,7 @@ func (t *TransactionContext) ExecuteAction(actionOrdinal int, recurseDepth uint3
 	return nil
 }
 
-func (t *TransactionContext) GetActionTrace(actionOrdinal int) (*core.ActionTrace, error) {
+func (t *TransactionContext) GetActionTrace(actionOrdinal int) (*transaction.ActionTrace, error) {
 	if actionOrdinal < 0 || actionOrdinal > len(t.Trace.ActionTraces) {
 		return nil, fmt.Errorf("action_ordinal %v is outside allowed range [1,%v]", actionOrdinal, len(t.Trace.ActionTraces))
 	}
@@ -251,8 +255,8 @@ func (t *TransactionContext) GetActionTrace(actionOrdinal int) (*core.ActionTrac
 }
 
 func (t *TransactionContext) Finalize() error {
-	now := core.Now()
-	t.Trace.Elapsed = core.Microseconds(now - t.start)
+	now := time.Now()
+	t.Trace.Elapsed = time.Microseconds(now - t.start)
 	t.UpdateBilledCpuTime(now)
 
 	return nil
@@ -272,13 +276,13 @@ func (t *TransactionContext) Commit() error {
 }
 
 func (t *TransactionContext) CheckTime() error {
-	now := core.Now()
+	now := time.Now()
 
 	if now < t.deadline {
 		return nil
 	}
 
-	duration := core.Microseconds(now - t.pseudoStart).Count()
+	duration := time.Microseconds(now - t.pseudoStart).Count()
 
 	if t.deadlineExceptionCode == (DeadlineException{}).Code() {
 		return fmt.Errorf("deadline exceeded %dus", duration)
@@ -298,10 +302,10 @@ func (t *TransactionContext) PauseBillingTimer() {
 		return
 	}
 
-	now := core.Now()
-	t.billedTime = core.Microseconds(now - t.pseudoStart)
+	now := time.Now()
+	t.billedTime = time.Microseconds(now - t.pseudoStart)
 	t.deadlineExceptionCode = DeadlineException{}.Code()
-	t.pseudoStart = core.TimePoint(0)
+	t.pseudoStart = time.TimePoint(0)
 }
 
 func (t *TransactionContext) ResumeBillingTimer() {
@@ -309,27 +313,27 @@ func (t *TransactionContext) ResumeBillingTimer() {
 		return
 	}
 
-	now := core.Now()
-	t.pseudoStart = now - core.TimePoint(t.billedTime)
+	now := time.Now()
+	t.pseudoStart = now - time.TimePoint(t.billedTime)
 }
 
-func (t *TransactionContext) UpdateBilledCpuTime(now core.TimePoint) {
+func (t *TransactionContext) UpdateBilledCpuTime(now time.TimePoint) {
 	billed := now - t.pseudoStart
 
-	if billed < core.TimePoint(config.MinTransactionCpuUsage) {
+	if billed < time.TimePoint(config.MinTransactionCpuUsage) {
 		t.BilledCpuTimeUs = int64(config.MinTransactionCpuUsage)
 	} else {
 		t.BilledCpuTimeUs = int64(billed)
 	}
 }
 
-func (t *TransactionContext) RecordTransaction(id core.TransactionIdType, expire core.TimePointSec) error {
+func (t *TransactionContext) RecordTransaction(id transaction.TransactionIdType, expire time.TimePointSec) error {
 	return t.Session.CreateTransactionObject(&transaction.TransactionObject{
 		TrxId:      id,
 		Expiration: expire,
 	})
 }
 
-func (t *TransactionContext) GetPublicationTime() core.TimePoint {
+func (t *TransactionContext) GetPublicationTime() time.TimePoint {
 	return t.Published
 }

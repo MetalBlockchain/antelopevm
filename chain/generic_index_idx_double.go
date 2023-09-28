@@ -3,10 +3,9 @@ package chain
 import (
 	"fmt"
 
-	"github.com/MetalBlockchain/antelopevm/core/contract"
-	"github.com/MetalBlockchain/antelopevm/core/name"
+	"github.com/MetalBlockchain/antelopevm/chain/name"
+	"github.com/MetalBlockchain/antelopevm/chain/table"
 	wasmApi "github.com/MetalBlockchain/antelopevm/wasm/api"
-	"github.com/inconshreveable/log15"
 )
 
 var _ wasmApi.MultiIndex[float64] = &IdxDouble{}
@@ -20,14 +19,14 @@ func (i *IdxDouble) Store(scope name.ScopeName, tableName name.TableName, payer 
 		return -1, errInvalidTablePayer
 	}
 
-	table, err := i.Context.FindOrCreateTable(i.Context.Receiver, scope, tableName, payer)
+	tab, err := i.Context.FindOrCreateTable(i.Context.Receiver, scope, tableName, payer)
 
 	if err != nil {
 		return -1, err
 	}
 
-	obj := &contract.IndexDoubleObject{
-		TableID:      table.ID,
+	obj := &table.IndexDoubleObject{
+		TableID:      tab.ID,
 		PrimaryKey:   primaryKey,
 		Payer:        payer,
 		SecondaryKey: secondaryKey,
@@ -37,13 +36,13 @@ func (i *IdxDouble) Store(scope name.ScopeName, tableName name.TableName, payer 
 		return -1, err
 	}
 
-	if err := i.Context.Session.ModifyTable(table, func() {
-		table.Count++
+	if err := i.Context.Session.ModifyTable(tab, func() {
+		tab.Count++
 	}); err != nil {
 		return -1, err
 	}
 
-	i.Context.KeyValueCache.cacheTable(table)
+	i.Context.KeyValueCache.cacheTable(tab)
 
 	iterator := i.Context.KeyValueCache.add(obj)
 
@@ -51,7 +50,7 @@ func (i *IdxDouble) Store(scope name.ScopeName, tableName name.TableName, payer 
 }
 
 func (i *IdxDouble) Remove(iterator int) error {
-	obj, ok := i.Context.KeyValueCache.get(iterator).(*contract.IndexDoubleObject)
+	obj, ok := i.Context.KeyValueCache.get(iterator).(*table.IndexDoubleObject)
 
 	if !ok {
 		return fmt.Errorf("could not cast value to")
@@ -85,7 +84,7 @@ func (i *IdxDouble) Remove(iterator int) error {
 }
 
 func (i *IdxDouble) Update(iterator int, payer name.AccountName, secondaryKey float64) error {
-	obj, ok := i.Context.KeyValueCache.get(iterator).(*contract.IndexDoubleObject)
+	obj, ok := i.Context.KeyValueCache.get(iterator).(*table.IndexDoubleObject)
 
 	if !ok {
 		return fmt.Errorf("could not cast value to")
@@ -188,7 +187,7 @@ func (i *IdxDouble) NextSecondary(iterator int, primaryKey *uint64) (int, error)
 		return -1, nil // cannot increment past end iterator of index
 	}
 
-	obj := i.Context.KeyValueCache.get(iterator).(*contract.IndexDoubleObject)
+	obj := i.Context.KeyValueCache.get(iterator).(*table.IndexDoubleObject)
 	nextObj, err := i.Context.Session.NextSecondaryIndexDouble(obj)
 
 	if err != nil || nextObj.TableID != obj.TableID {
@@ -219,10 +218,8 @@ func (i *IdxDouble) PreviousSecondary(iterator int, primaryKey *uint64) (int, er
 		return i.Context.KeyValueCache.add(obj), nil
 	}
 
-	obj := i.Context.KeyValueCache.get(iterator).(*contract.IndexDoubleObject)
+	obj := i.Context.KeyValueCache.get(iterator).(*table.IndexDoubleObject)
 	previousObj, err := i.Context.Session.PreviousSecondaryIndexDouble(obj)
-
-	log15.Info("previous", "g", previousObj, "obj", obj)
 
 	if err != nil || previousObj.TableID != obj.TableID || previousObj.SecondaryKey > obj.SecondaryKey {
 		return -1, nil
@@ -291,7 +288,7 @@ func (i *IdxDouble) NextPrimary(iterator int, primaryKey *uint64) (int, error) {
 		return -1, nil // cannot increment past end iterator of index
 	}
 
-	obj := i.Context.KeyValueCache.get(iterator).(*contract.IndexDoubleObject)
+	obj := i.Context.KeyValueCache.get(iterator).(*table.IndexDoubleObject)
 	nextObj, err := i.Context.Session.NextPrimaryIndexDouble(obj)
 
 	if err != nil || nextObj.TableID != obj.TableID {
@@ -322,7 +319,7 @@ func (i *IdxDouble) PreviousPrimary(iterator int, primaryKey *uint64) (int, erro
 		return i.Context.KeyValueCache.add(obj), nil
 	}
 
-	obj := i.Context.KeyValueCache.get(iterator).(*contract.IndexDoubleObject)
+	obj := i.Context.KeyValueCache.get(iterator).(*table.IndexDoubleObject)
 	previousObj, err := i.Context.Session.PreviousPrimaryIndexDouble(obj)
 
 	if err != nil || previousObj.TableID != obj.TableID {

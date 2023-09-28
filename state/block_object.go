@@ -5,44 +5,45 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/MetalBlockchain/antelopevm/core/name"
+	"github.com/MetalBlockchain/antelopevm/chain/block"
+	"github.com/MetalBlockchain/antelopevm/chain/entity"
+	"github.com/MetalBlockchain/antelopevm/chain/name"
+	chainTime "github.com/MetalBlockchain/antelopevm/chain/time"
+	"github.com/MetalBlockchain/antelopevm/chain/transaction"
+	"github.com/MetalBlockchain/antelopevm/chain/types"
 	"github.com/MetalBlockchain/antelopevm/crypto"
 	"github.com/MetalBlockchain/metalgo/ids"
 	"github.com/MetalBlockchain/metalgo/snow/choices"
 	"github.com/MetalBlockchain/metalgo/snow/consensus/snowman"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/inconshreveable/log15"
+	log "github.com/inconshreveable/log15"
 )
 
 var (
 	_ snowman.Block = &Block{}
-	_ core.Entity   = &Block{}
+	_ entity.Entity = &Block{}
 )
 
-//go:generate msgp
 type Block struct {
-	Index           core.IdType               `serialize:"true"`
-	Hash            core.BlockHash            `serialize:"true"`
-	Header          core.BlockHeader          `serialize:"true"`
-	Transactions    []core.TransactionReceipt `serialize:"true"`
-	BlockExtensions []core.Extension          `serialize:"true"`
-	BlockStatus     core.BlockStatus          `serialize:"true"`
+	Index           types.IdType                     `serialize:"true"`
+	Hash            block.BlockHash                  `serialize:"true"`
+	Header          block.BlockHeader                `serialize:"true"`
+	Transactions    []transaction.TransactionReceipt `serialize:"true"`
+	BlockExtensions []types.Extension                `serialize:"true"`
+	BlockStatus     block.BlockStatus                `serialize:"true"`
 	vm              VM
 }
 
-func NewBlock(vm VM, timestamp core.TimePoint, parent core.BlockHash, height uint64) *Block {
+func NewBlock(vm VM, timestamp chainTime.TimePoint, parent block.BlockHash, height uint64) *Block {
 	return &Block{
-		Header: core.BlockHeader{
-			Created:           timestamp,
-			Producer:          name.StringToName("eosio"),
-			Confirmed:         1,
-			PreviousBlockHash: parent,
-			Index:             height,
+		Header: block.BlockHeader{
+			Timestamp: block.NewBlockTimeStampFromTimePoint(timestamp),
+			Producer:  name.StringToName("eosio"),
+			Confirmed: 1,
+			Previous:  *crypto.Hash256(parent),
 		},
-		Transactions: make([]core.TransactionReceipt, 0),
+		Transactions: make([]transaction.TransactionReceipt, 0),
 		vm:           vm,
-		BlockStatus:  core.BlockStatusProcessing,
+		BlockStatus:  block.BlockStatusProcessing,
 	}
 }
 
@@ -91,10 +92,10 @@ func (b *Block) Reject(ctx context.Context) error {
 }
 
 func (b *Block) Bytes() []byte {
-	bytes, err := b.MarshalMsg(nil)
+	bytes, err := Codec.Marshal(CodecVersion, b)
 
 	if err != nil {
-		log15.Error("failed to get bytes", "error", err)
+		log.Error("failed to get bytes", "error", err)
 	}
 
 	return bytes
@@ -107,20 +108,20 @@ func (b *Block) ID() ids.ID {
 
 // ParentID returns [b]'s parent's ID
 func (b *Block) Parent() ids.ID {
-	return ids.ID(b.Header.PreviousBlockHash)
+	return ids.ID(b.Header.Previous.Bytes())
 }
 
 // Height returns this block's height. The genesis block has height 1.
-func (b *Block) Height() uint64 { return b.Header.Index }
+func (b *Block) Height() uint64 { return uint64(b.Header.BlockNum()) }
 
 // Timestamp returns this block's time. The genesis block has time 0.
-func (b *Block) Timestamp() time.Time { return b.Header.Created.ToTime() }
+func (b *Block) Timestamp() time.Time { return b.Header.Timestamp.ToTimePoint().ToTime() }
 
 // Status returns the status of this block
 func (b *Block) Status() choices.Status {
-	if b.BlockStatus == core.BlockStatusAccepted {
+	if b.BlockStatus == block.BlockStatusAccepted {
 		return choices.Accepted
-	} else if b.BlockStatus == core.BlockStatusRejected {
+	} else if b.BlockStatus == block.BlockStatusRejected {
 		return choices.Rejected
 	}
 
@@ -130,25 +131,25 @@ func (b *Block) Status() choices.Status {
 // SetStatus sets the status of this block
 func (b *Block) SetStatus(status choices.Status) {
 	if status == choices.Accepted {
-		b.BlockStatus = core.BlockStatusAccepted
+		b.BlockStatus = block.BlockStatusAccepted
 	} else if status == choices.Rejected {
-		b.BlockStatus = core.BlockStatusRejected
+		b.BlockStatus = block.BlockStatusRejected
 	} else {
-		b.BlockStatus = core.BlockStatusProcessing
+		b.BlockStatus = block.BlockStatusProcessing
 	}
 }
 
 func (b *Block) Finalize() {
 	digest := crypto.Hash256(b.Header)
-	b.Hash = core.BlockHash(digest.FixedBytes())
+	b.Hash = block.BlockHash(digest.FixedBytes())
 }
 
 func (b Block) GetId() []byte {
 	return b.Index.ToBytes()
 }
 
-func (b Block) GetIndexes() map[string]core.EntityIndex {
-	return map[string]core.EntityIndex{
+func (b Block) GetIndexes() map[string]entity.EntityIndex {
+	return map[string]entity.EntityIndex{
 		"id": {
 			Fields: []string{"Index"},
 		},
@@ -159,5 +160,5 @@ func (b Block) GetIndexes() map[string]core.EntityIndex {
 }
 
 func (a Block) GetObjectType() uint8 {
-	return core.BlockType
+	return entity.BlockType
 }

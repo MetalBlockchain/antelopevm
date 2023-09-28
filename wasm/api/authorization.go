@@ -1,7 +1,7 @@
 package api
 
 import (
-	"github.com/MetalBlockchain/antelopevm/core/name"
+	"github.com/MetalBlockchain/antelopevm/chain/name"
 )
 
 func init() {

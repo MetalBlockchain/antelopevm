@@ -1,9 +1,9 @@
 package api
 
 import (
+	"github.com/MetalBlockchain/antelopevm/chain/name"
+	"github.com/MetalBlockchain/antelopevm/chain/transaction"
 	"github.com/MetalBlockchain/antelopevm/config"
-	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/MetalBlockchain/antelopevm/core/name"
 	"github.com/MetalBlockchain/antelopevm/crypto/rlp"
 )
 
@@ -21,7 +21,7 @@ func sendInline(context Context) interface{} {
 		}
 
 		data := context.ReadMemory(ptr, length)
-		action := &core.Action{}
+		action := &transaction.Action{}
 
 		if err := rlp.DecodeBytes(data, action); err != nil {
 			panic("failed to decode action")
@@ -40,7 +40,7 @@ func sendContextFreeInline(context Context) interface{} {
 		}
 
 		data := context.ReadMemory(ptr, length)
-		action := &core.Action{}
+		action := &transaction.Action{}
 
 		if err := rlp.DecodeBytes(data, action); err != nil {
 			panic("failed to decode action")

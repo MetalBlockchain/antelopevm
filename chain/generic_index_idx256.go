@@ -3,11 +3,10 @@ package chain
 import (
 	"fmt"
 
-	"github.com/MetalBlockchain/antelopevm/core/contract"
-	"github.com/MetalBlockchain/antelopevm/core/name"
+	"github.com/MetalBlockchain/antelopevm/chain/name"
+	"github.com/MetalBlockchain/antelopevm/chain/table"
 	"github.com/MetalBlockchain/antelopevm/math"
 	wasmApi "github.com/MetalBlockchain/antelopevm/wasm/api"
-	"github.com/inconshreveable/log15"
 )
 
 var _ wasmApi.MultiIndex[math.Uint256] = &Idx256{}
@@ -21,14 +20,14 @@ func (i *Idx256) Store(scope name.ScopeName, tableName name.TableName, payer nam
 		return -1, errInvalidTablePayer
 	}
 
-	table, err := i.Context.FindOrCreateTable(i.Context.Receiver, scope, tableName, payer)
+	tab, err := i.Context.FindOrCreateTable(i.Context.Receiver, scope, tableName, payer)
 
 	if err != nil {
 		return -1, err
 	}
 
-	obj := &contract.Index256Object{
-		TableID:      table.ID,
+	obj := &table.Index256Object{
+		TableID:      tab.ID,
 		PrimaryKey:   primaryKey,
 		Payer:        payer,
 		SecondaryKey: secondaryKey,
@@ -38,13 +37,13 @@ func (i *Idx256) Store(scope name.ScopeName, tableName name.TableName, payer nam
 		return -1, err
 	}
 
-	if err := i.Context.Session.ModifyTable(table, func() {
-		table.Count++
+	if err := i.Context.Session.ModifyTable(tab, func() {
+		tab.Count++
 	}); err != nil {
 		return -1, err
 	}
 
-	i.Context.KeyValueCache.cacheTable(table)
+	i.Context.KeyValueCache.cacheTable(tab)
 
 	iterator := i.Context.KeyValueCache.add(obj)
 
@@ -52,7 +51,7 @@ func (i *Idx256) Store(scope name.ScopeName, tableName name.TableName, payer nam
 }
 
 func (i *Idx256) Remove(iterator int) error {
-	obj, ok := i.Context.KeyValueCache.get(iterator).(*contract.Index256Object)
+	obj, ok := i.Context.KeyValueCache.get(iterator).(*table.Index256Object)
 
 	if !ok {
 		return fmt.Errorf("could not cast value to")
@@ -86,7 +85,7 @@ func (i *Idx256) Remove(iterator int) error {
 }
 
 func (i *Idx256) Update(iterator int, payer name.AccountName, secondaryKey math.Uint256) error {
-	obj, ok := i.Context.KeyValueCache.get(iterator).(*contract.Index256Object)
+	obj, ok := i.Context.KeyValueCache.get(iterator).(*table.Index256Object)
 
 	if !ok {
 		return fmt.Errorf("could not cast value to")
@@ -189,7 +188,7 @@ func (i *Idx256) NextSecondary(iterator int, primaryKey *uint64) (int, error) {
 		return -1, nil // cannot increment past end iterator of index
 	}
 
-	obj := i.Context.KeyValueCache.get(iterator).(*contract.Index256Object)
+	obj := i.Context.KeyValueCache.get(iterator).(*table.Index256Object)
 	nextObj, err := i.Context.Session.NextSecondaryIndex256(obj)
 
 	if err != nil || nextObj.TableID != obj.TableID {
@@ -220,10 +219,8 @@ func (i *Idx256) PreviousSecondary(iterator int, primaryKey *uint64) (int, error
 		return i.Context.KeyValueCache.add(obj), nil
 	}
 
-	obj := i.Context.KeyValueCache.get(iterator).(*contract.Index256Object)
+	obj := i.Context.KeyValueCache.get(iterator).(*table.Index256Object)
 	previousObj, err := i.Context.Session.PreviousSecondaryIndex256(obj)
-
-	log15.Info("previous", "g", previousObj, "obj", obj)
 
 	if err != nil || previousObj.TableID != obj.TableID || previousObj.SecondaryKey.Compare(obj.SecondaryKey) > 0 {
 		return -1, nil
@@ -292,7 +289,7 @@ func (i *Idx256) NextPrimary(iterator int, primaryKey *uint64) (int, error) {
 		return -1, nil // cannot increment past end iterator of index
 	}
 
-	obj := i.Context.KeyValueCache.get(iterator).(*contract.Index256Object)
+	obj := i.Context.KeyValueCache.get(iterator).(*table.Index256Object)
 	nextObj, err := i.Context.Session.NextPrimaryIndex256(obj)
 
 	if err != nil || nextObj.TableID != obj.TableID {
@@ -323,7 +320,7 @@ func (i *Idx256) PreviousPrimary(iterator int, primaryKey *uint64) (int, error) 
 		return i.Context.KeyValueCache.add(obj), nil
 	}
 
-	obj := i.Context.KeyValueCache.get(iterator).(*contract.Index256Object)
+	obj := i.Context.KeyValueCache.get(iterator).(*table.Index256Object)
 	previousObj, err := i.Context.Session.PreviousPrimaryIndex256(obj)
 
 	if err != nil || previousObj.TableID != obj.TableID {

@@ -1,17 +1,17 @@
 package state
 
 import (
-	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/MetalBlockchain/antelopevm/core/contract"
+	"github.com/MetalBlockchain/antelopevm/chain/table"
+	"github.com/MetalBlockchain/antelopevm/chain/types"
 	"github.com/dgraph-io/badger/v3"
 )
 
-func (s *Session) FindIdxDoubleObject(id core.IdType) (*contract.IndexDoubleObject, error) {
+func (s *Session) FindIdxDoubleObject(id types.IdType) (*table.IndexDoubleObject, error) {
 	if obj, found := s.indexObjectCache.Get(id); found {
-		return obj.(*contract.IndexDoubleObject), nil
+		return obj.(*table.IndexDoubleObject), nil
 	}
 
-	key := getObjectKeyByIndex(&contract.IndexDoubleObject{ID: id}, "id")
+	key := getObjectKeyByIndex(&table.IndexDoubleObject{ID: id}, "id")
 	item, err := s.transaction.Get(key)
 
 	if err != nil {
@@ -24,9 +24,9 @@ func (s *Session) FindIdxDoubleObject(id core.IdType) (*contract.IndexDoubleObje
 		return nil, err
 	}
 
-	out := &contract.IndexDoubleObject{}
+	out := &table.IndexDoubleObject{}
 
-	if _, err := out.UnmarshalMsg(data); err != nil {
+	if _, err := Codec.Unmarshal(data, out); err != nil {
 		return nil, err
 	}
 
@@ -35,8 +35,8 @@ func (s *Session) FindIdxDoubleObject(id core.IdType) (*contract.IndexDoubleObje
 	return out, nil
 }
 
-func (s *Session) FindIdxDoubleObjectBySecondary(tableId core.IdType, secondaryKey float64) (*contract.IndexDoubleObject, error) {
-	key := getPartialKey("bySecondary", &contract.IndexDoubleObject{}, tableId, secondaryKey)
+func (s *Session) FindIdxDoubleObjectBySecondary(tableId types.IdType, secondaryKey float64) (*table.IndexDoubleObject, error) {
+	key := getPartialKey("bySecondary", &table.IndexDoubleObject{}, tableId, secondaryKey)
 	opts := badger.DefaultIteratorOptions
 	opts.Prefix = key
 	iterator := s.transaction.NewIterator(opts)
@@ -50,14 +50,14 @@ func (s *Session) FindIdxDoubleObjectBySecondary(tableId core.IdType, secondaryK
 			return nil, err
 		}
 
-		return s.FindIdxDoubleObject(core.NewIdType(key))
+		return s.FindIdxDoubleObject(types.NewIdType(key))
 	}
 
 	return nil, badger.ErrKeyNotFound
 }
 
-func (s *Session) FindIdxDoubleObjectByPrimary(tableId core.IdType, primaryKey uint64) (*contract.IndexDoubleObject, error) {
-	key := getObjectKeyByIndex(&contract.IndexDoubleObject{TableID: tableId, PrimaryKey: primaryKey}, "byPrimary")
+func (s *Session) FindIdxDoubleObjectByPrimary(tableId types.IdType, primaryKey uint64) (*table.IndexDoubleObject, error) {
+	key := getObjectKeyByIndex(&table.IndexDoubleObject{TableID: tableId, PrimaryKey: primaryKey}, "byPrimary")
 	opts := badger.DefaultIteratorOptions
 	opts.Prefix = key
 	iterator := s.transaction.NewIterator(opts)
@@ -71,14 +71,14 @@ func (s *Session) FindIdxDoubleObjectByPrimary(tableId core.IdType, primaryKey u
 			return nil, err
 		}
 
-		return s.FindIdxDoubleObject(core.NewIdType(key))
+		return s.FindIdxDoubleObject(types.NewIdType(key))
 	}
 
 	return nil, badger.ErrKeyNotFound
 }
 
-func (s *Session) CreateIdxDoubleObject(in *contract.IndexDoubleObject) error {
-	err := s.create(true, func(id core.IdType) error {
+func (s *Session) CreateIdxDoubleObject(in *table.IndexDoubleObject) error {
+	err := s.create(true, func(id types.IdType) error {
 		in.ID = id
 		return nil
 	}, in)
@@ -92,7 +92,7 @@ func (s *Session) CreateIdxDoubleObject(in *contract.IndexDoubleObject) error {
 	return nil
 }
 
-func (s *Session) ModifyIndexDoubleObject(in *contract.IndexDoubleObject, modifyFunc func()) error {
+func (s *Session) ModifyIndexDoubleObject(in *table.IndexDoubleObject, modifyFunc func()) error {
 	if err := s.modify(in, modifyFunc); err != nil {
 		return err
 	}
@@ -102,7 +102,7 @@ func (s *Session) ModifyIndexDoubleObject(in *contract.IndexDoubleObject, modify
 	return nil
 }
 
-func (s *Session) RemoveIndexDoubleObject(in *contract.IndexDoubleObject) error {
+func (s *Session) RemoveIndexDoubleObject(in *table.IndexDoubleObject) error {
 	if err := s.remove(in); err != nil {
 		return err
 	}
@@ -112,11 +112,11 @@ func (s *Session) RemoveIndexDoubleObject(in *contract.IndexDoubleObject) error 
 	return nil
 }
 
-func (s *Session) LowerboundSecondaryIndexDouble(tableId core.IdType, secondary float64) (*contract.IndexDoubleObject, error) {
-	requiredPrefix := getPartialKey("bySecondary", &contract.IndexDoubleObject{}, tableId)
-	prefix := getPartialKey("bySecondary", &contract.IndexDoubleObject{}, tableId, secondary)
-	iterator := newIterator(s, requiredPrefix, func(b []byte) (*contract.IndexDoubleObject, error) {
-		return s.FindIdxDoubleObject(core.NewIdType(b))
+func (s *Session) LowerboundSecondaryIndexDouble(tableId types.IdType, secondary float64) (*table.IndexDoubleObject, error) {
+	requiredPrefix := getPartialKey("bySecondary", &table.IndexDoubleObject{}, tableId)
+	prefix := getPartialKey("bySecondary", &table.IndexDoubleObject{}, tableId, secondary)
+	iterator := newIterator(s, requiredPrefix, func(b []byte) (*table.IndexDoubleObject, error) {
+		return s.FindIdxDoubleObject(types.NewIdType(b))
 	})
 	defer iterator.Close()
 	iterator.Seek(prefix)
@@ -128,11 +128,11 @@ func (s *Session) LowerboundSecondaryIndexDouble(tableId core.IdType, secondary 
 	return nil, badger.ErrKeyNotFound
 }
 
-func (s *Session) UpperboundSecondaryIndexDouble(values ...interface{}) (*contract.IndexDoubleObject, error) {
-	requiredPrefix := getPartialKey("bySecondary", &contract.IndexDoubleObject{}, values[:len(values)-1]...)
-	prefix := getPartialKey("bySecondary", &contract.IndexDoubleObject{}, values...)
-	iterator := newIterator(s, requiredPrefix, func(b []byte) (*contract.IndexDoubleObject, error) {
-		return s.FindIdxDoubleObject(core.NewIdType(b))
+func (s *Session) UpperboundSecondaryIndexDouble(values ...interface{}) (*table.IndexDoubleObject, error) {
+	requiredPrefix := getPartialKey("bySecondary", &table.IndexDoubleObject{}, values[:len(values)-1]...)
+	prefix := getPartialKey("bySecondary", &table.IndexDoubleObject{}, values...)
+	iterator := newIterator(s, requiredPrefix, func(b []byte) (*table.IndexDoubleObject, error) {
+		return s.FindIdxDoubleObject(types.NewIdType(b))
 	})
 	defer iterator.Close()
 	iterator.Seek(prefix)
@@ -149,7 +149,7 @@ func (s *Session) UpperboundSecondaryIndexDouble(values ...interface{}) (*contra
 	return nil, badger.ErrKeyNotFound
 }
 
-func (s *Session) NextSecondaryIndexDouble(kv *contract.IndexDoubleObject) (*contract.IndexDoubleObject, error) {
+func (s *Session) NextSecondaryIndexDouble(kv *table.IndexDoubleObject) (*table.IndexDoubleObject, error) {
 	key := getObjectKeyByIndex(kv, "bySecondary")
 	opts := badger.DefaultIteratorOptions
 	opts.PrefetchSize = 2
@@ -165,10 +165,10 @@ func (s *Session) NextSecondaryIndexDouble(kv *contract.IndexDoubleObject) (*con
 		return nil, err
 	}
 
-	return s.FindIdxDoubleObject(core.NewIdType(data))
+	return s.FindIdxDoubleObject(types.NewIdType(data))
 }
 
-func (s *Session) PreviousSecondaryIndexDouble(kv *contract.IndexDoubleObject) (*contract.IndexDoubleObject, error) {
+func (s *Session) PreviousSecondaryIndexDouble(kv *table.IndexDoubleObject) (*table.IndexDoubleObject, error) {
 	key := getObjectKeyByIndex(kv, "bySecondary")
 	opts := badger.DefaultIteratorOptions
 	opts.PrefetchSize = 2
@@ -185,7 +185,7 @@ func (s *Session) PreviousSecondaryIndexDouble(kv *contract.IndexDoubleObject) (
 		return nil, err
 	}
 
-	out, err := s.FindIdxDoubleObject(core.NewIdType(data))
+	out, err := s.FindIdxDoubleObject(types.NewIdType(data))
 
 	if err != nil {
 		return nil, err
@@ -194,10 +194,10 @@ func (s *Session) PreviousSecondaryIndexDouble(kv *contract.IndexDoubleObject) (
 	return out, nil
 }
 
-func (s *Session) LowerboundPrimaryIndexDouble(tableId core.IdType, primary uint64) (*contract.IndexDoubleObject, error) {
-	requiredPrefix := getPartialKey("byPrimary", &contract.IndexDoubleObject{}, tableId, primary)
-	iterator := newIterator(s, requiredPrefix, func(b []byte) (*contract.IndexDoubleObject, error) {
-		return s.FindIdxDoubleObject(core.NewIdType(b))
+func (s *Session) LowerboundPrimaryIndexDouble(tableId types.IdType, primary uint64) (*table.IndexDoubleObject, error) {
+	requiredPrefix := getPartialKey("byPrimary", &table.IndexDoubleObject{}, tableId, primary)
+	iterator := newIterator(s, requiredPrefix, func(b []byte) (*table.IndexDoubleObject, error) {
+		return s.FindIdxDoubleObject(types.NewIdType(b))
 	})
 	defer iterator.Close()
 	iterator.Seek(requiredPrefix)
@@ -209,10 +209,10 @@ func (s *Session) LowerboundPrimaryIndexDouble(tableId core.IdType, primary uint
 	return nil, badger.ErrKeyNotFound
 }
 
-func (s *Session) UpperboundPrimaryIndexDouble(values ...interface{}) (*contract.IndexDoubleObject, error) {
-	requiredPrefix := getPartialKey("byPrimary", &contract.IndexDoubleObject{}, values...)
-	iterator := newReverseIterator(s, requiredPrefix, func(b []byte) (*contract.IndexDoubleObject, error) {
-		return s.FindIdxDoubleObject(core.NewIdType(b))
+func (s *Session) UpperboundPrimaryIndexDouble(values ...interface{}) (*table.IndexDoubleObject, error) {
+	requiredPrefix := getPartialKey("byPrimary", &table.IndexDoubleObject{}, values...)
+	iterator := newReverseIterator(s, requiredPrefix, func(b []byte) (*table.IndexDoubleObject, error) {
+		return s.FindIdxDoubleObject(types.NewIdType(b))
 	})
 	defer iterator.Close()
 	iterator.Seek(requiredPrefix)
@@ -224,7 +224,7 @@ func (s *Session) UpperboundPrimaryIndexDouble(values ...interface{}) (*contract
 	return nil, badger.ErrKeyNotFound
 }
 
-func (s *Session) NextPrimaryIndexDouble(kv *contract.IndexDoubleObject) (*contract.IndexDoubleObject, error) {
+func (s *Session) NextPrimaryIndexDouble(kv *table.IndexDoubleObject) (*table.IndexDoubleObject, error) {
 	key := getObjectKeyByIndex(kv, "byPrimary")
 	opts := badger.DefaultIteratorOptions
 	opts.PrefetchSize = 2
@@ -240,10 +240,10 @@ func (s *Session) NextPrimaryIndexDouble(kv *contract.IndexDoubleObject) (*contr
 		return nil, err
 	}
 
-	return s.FindIdxDoubleObject(core.NewIdType(data))
+	return s.FindIdxDoubleObject(types.NewIdType(data))
 }
 
-func (s *Session) PreviousPrimaryIndexDouble(kv *contract.IndexDoubleObject) (*contract.IndexDoubleObject, error) {
+func (s *Session) PreviousPrimaryIndexDouble(kv *table.IndexDoubleObject) (*table.IndexDoubleObject, error) {
 	key := getObjectKeyByIndex(kv, "byPrimary")
 	opts := badger.DefaultIteratorOptions
 	opts.PrefetchSize = 2
@@ -260,5 +260,5 @@ func (s *Session) PreviousPrimaryIndexDouble(kv *contract.IndexDoubleObject) (*c
 		return nil, err
 	}
 
-	return s.FindIdxDoubleObject(core.NewIdType(data))
+	return s.FindIdxDoubleObject(types.NewIdType(data))
 }

@@ -2,8 +2,6 @@ package api
 
 import (
 	"fmt"
-
-	"github.com/inconshreveable/log15"
 )
 
 func init() {
@@ -33,8 +31,6 @@ func assert(context Context) interface{} {
 
 				size++
 			}
-
-			log15.Info("f", "data", data, "size", size, "ptr", ptr)
 
 			text := string(data[:size])
 

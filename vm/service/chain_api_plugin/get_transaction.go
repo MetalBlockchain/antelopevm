@@ -5,26 +5,28 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/MetalBlockchain/antelopevm/abi"
-	"github.com/MetalBlockchain/antelopevm/core"
+	"github.com/MetalBlockchain/antelopevm/chain/abi"
+	"github.com/MetalBlockchain/antelopevm/chain/block"
+	"github.com/MetalBlockchain/antelopevm/chain/fc"
+	"github.com/MetalBlockchain/antelopevm/chain/transaction"
 	"github.com/MetalBlockchain/antelopevm/crypto"
 	"github.com/MetalBlockchain/antelopevm/vm/service"
 	"github.com/gin-gonic/gin"
-	"github.com/inconshreveable/log15"
+	log "github.com/inconshreveable/log15"
 )
 
 type GetTransactionRequest struct {
 	TransactionId string `json:"id"`
 }
 
-type TransactionReceipt core.TransactionReceipt
+type TransactionReceipt transaction.TransactionReceipt
 
 func (t *TransactionReceipt) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
-		Status        core.TransactionStatus `json:"status"`
-		CpuUsageUs    uint32                 `json:"cpu_usage_us"`
-		NetUsageWords core.Vuint32           `json:"net_usage_words"`
-		Transactions  []interface{}          `json:"trx"`
+		Status        transaction.TransactionStatus `json:"status"`
+		CpuUsageUs    uint32                        `json:"cpu_usage_us"`
+		NetUsageWords fc.UnsignedInt                `json:"net_usage_words"`
+		Transactions  []interface{}                 `json:"trx"`
 	}{
 		CpuUsageUs:    t.TransactionReceiptHeader.CpuUsageUs,
 		NetUsageWords: t.TransactionReceiptHeader.NetUsageWords,
@@ -37,20 +39,20 @@ func (t *TransactionReceipt) MarshalJSON() ([]byte, error) {
 }
 
 type TransactionMetaData struct {
-	Receipt     TransactionReceipt     `json:"receipt"`
-	Transaction core.SignedTransaction `json:"trx"`
+	Receipt     TransactionReceipt            `json:"receipt"`
+	Transaction transaction.SignedTransaction `json:"trx"`
 }
 
 type GetTransactionResponse struct {
-	BlockNum              uint64                 `json:"block_num"`
-	BlockTime             string                 `json:"block_time"`
-	HeadBlockNum          uint32                 `json:"head_block_num"`
-	Id                    core.TransactionIdType `json:"id"`
-	Irreversible          bool                   `json:"irreversible"`
-	LastIrreversibleBlock uint32                 `json:"last_irreversible_block"`
-	TransactionNum        uint32                 `json:"transaction_num"`
-	Traces                []core.ActionTrace     `json:"traces"`
-	MetaData              TransactionMetaData    `json:"trx"`
+	BlockNum              uint64                        `json:"block_num"`
+	BlockTime             string                        `json:"block_time"`
+	HeadBlockNum          uint32                        `json:"head_block_num"`
+	Id                    transaction.TransactionIdType `json:"id"`
+	Irreversible          bool                          `json:"irreversible"`
+	LastIrreversibleBlock uint32                        `json:"last_irreversible_block"`
+	TransactionNum        uint32                        `json:"transaction_num"`
+	Traces                []transaction.ActionTrace     `json:"traces"`
+	MetaData              TransactionMetaData           `json:"trx"`
 }
 
 func init() {
@@ -65,7 +67,7 @@ func GetTransaction(vm service.VM) gin.HandlerFunc {
 		var body GetTransactionRequest
 		json.NewDecoder(c.Request.Body).Decode(&body)
 
-		hash := core.TransactionIdType(*crypto.NewSha256String(body.TransactionId))
+		hash := transaction.TransactionIdType(*crypto.NewSha256String(body.TransactionId))
 		session := vm.GetState().CreateSession(false)
 		defer session.Discard()
 		trx, err := session.FindTransactionByHash(hash)
@@ -76,15 +78,15 @@ func GetTransaction(vm service.VM) gin.HandlerFunc {
 		}
 
 		lastAcceptedId, _ := vm.LastAccepted(context.Background())
-		lastAccepted, _ := session.FindBlockByHash(core.BlockHash(lastAcceptedId))
+		lastAccepted, _ := session.FindBlockByHash(block.BlockHash(lastAcceptedId))
 		signedTrx, _ := trx.Receipt.Transaction.GetSignedTransaction()
 		response := &GetTransactionResponse{
 			BlockNum:              trx.BlockNum,
 			BlockTime:             trx.BlockTime.String(),
-			HeadBlockNum:          uint32(lastAccepted.Header.Index),
+			HeadBlockNum:          uint32(lastAccepted.Header.BlockNum()),
 			Id:                    trx.Hash,
 			Irreversible:          true,
-			LastIrreversibleBlock: uint32(lastAccepted.Header.Index),
+			LastIrreversibleBlock: uint32(lastAccepted.Header.BlockNum()),
 			TransactionNum:        0,
 			Traces:                trx.ActionTraces,
 			MetaData: TransactionMetaData{
@@ -103,10 +105,10 @@ func GetTransaction(vm service.VM) gin.HandlerFunc {
 							if err := json.Unmarshal(data, &parsedData); err == nil {
 								response.Traces[index].Action.ParsedData = parsedData
 							} else {
-								log15.Error("err 2", "e", err)
+								log.Error("err", "e", err)
 							}
 						} else {
-							log15.Error("err", "e", err)
+							log.Error("err", "e", err)
 						}
 					}
 				}

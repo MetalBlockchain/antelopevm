@@ -3,9 +3,11 @@ package state
 import (
 	"encoding/binary"
 
-	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/MetalBlockchain/antelopevm/core/account"
-	"github.com/MetalBlockchain/antelopevm/core/resource"
+	"github.com/MetalBlockchain/antelopevm/chain/account"
+	"github.com/MetalBlockchain/antelopevm/chain/entity"
+	"github.com/MetalBlockchain/antelopevm/chain/resource"
+	"github.com/MetalBlockchain/antelopevm/chain/table"
+	"github.com/MetalBlockchain/antelopevm/chain/types"
 	"github.com/MetalBlockchain/metalgo/cache"
 	"github.com/dgraph-io/badger/v3"
 )
@@ -13,44 +15,42 @@ import (
 type Session struct {
 	state               *State
 	transaction         *badger.Txn
-	accountCache        *cache.LRU[core.IdType, *account.Account]
-	tableCache          *cache.LRU[core.IdType, *core.Table]
-	kvCache             *cache.LRU[core.IdType, *core.KeyValue]
-	indexObjectCache    *cache.LRU[core.IdType, interface{}]
-	resourceUsageCache  *cache.LRU[core.IdType, *resource.ResourceUsage]
-	resourceLimitsCache *cache.LRU[core.IdType, *resource.ResourceLimits]
+	accountCache        *cache.LRU[types.IdType, *account.Account]
+	tableCache          *cache.LRU[types.IdType, *table.Table]
+	kvCache             *cache.LRU[types.IdType, *table.KeyValue]
+	indexObjectCache    *cache.LRU[types.IdType, interface{}]
+	resourceUsageCache  *cache.LRU[types.IdType, *resource.ResourceUsage]
+	resourceLimitsCache *cache.LRU[types.IdType, *resource.ResourceLimits]
 }
 
 func NewSession(state *State, transaction *badger.Txn) *Session {
 	session := &Session{
 		state:               state,
 		transaction:         transaction,
-		accountCache:        &cache.LRU[core.IdType, *account.Account]{Size: blockCacheSize},
-		tableCache:          &cache.LRU[core.IdType, *core.Table]{Size: blockCacheSize},
-		kvCache:             &cache.LRU[core.IdType, *core.KeyValue]{Size: blockCacheSize},
-		indexObjectCache:    &cache.LRU[core.IdType, interface{}]{Size: blockCacheSize},
-		resourceUsageCache:  &cache.LRU[core.IdType, *resource.ResourceUsage]{Size: blockCacheSize},
-		resourceLimitsCache: &cache.LRU[core.IdType, *resource.ResourceLimits]{Size: blockCacheSize},
+		accountCache:        &cache.LRU[types.IdType, *account.Account]{Size: blockCacheSize},
+		tableCache:          &cache.LRU[types.IdType, *table.Table]{Size: blockCacheSize},
+		kvCache:             &cache.LRU[types.IdType, *table.KeyValue]{Size: blockCacheSize},
+		indexObjectCache:    &cache.LRU[types.IdType, interface{}]{Size: blockCacheSize},
+		resourceUsageCache:  &cache.LRU[types.IdType, *resource.ResourceUsage]{Size: blockCacheSize},
+		resourceLimitsCache: &cache.LRU[types.IdType, *resource.ResourceLimits]{Size: blockCacheSize},
 	}
 
 	return session
 }
 
-func (s *Session) create(incrementId bool, setId func(core.IdType) error, in core.Entity) error {
+func (s *Session) create(incrementId bool, setId func(types.IdType) error, in entity.Entity) error {
 	if incrementId {
 		id, err := s.increment([]byte{in.GetObjectType()})
-
 		if err != nil {
 			return err
 		}
 
-		if err := setId(core.IdType(id)); err != nil {
+		if err := setId(types.IdType(id)); err != nil {
 			return err
 		}
 	}
 
-	bytes, err := in.MarshalMsg(nil)
-
+	bytes, err := Codec.Marshal(CodecVersion, in)
 	if err != nil {
 		return err
 	}
@@ -72,11 +72,10 @@ func (s *Session) create(incrementId bool, setId func(core.IdType) error, in cor
 	return nil
 }
 
-func (s *Session) modify(in core.Entity, modifyFunc func()) error {
+func (s *Session) modify(in entity.Entity, modifyFunc func()) error {
 	keys := getObjectKeys(in)
 	modifyFunc()
-	bytes, err := in.MarshalMsg(nil)
-
+	bytes, err := Codec.Marshal(CodecVersion, in)
 	if err != nil {
 		return err
 	}
@@ -96,7 +95,7 @@ func (s *Session) modify(in core.Entity, modifyFunc func()) error {
 	return nil
 }
 
-func (s *Session) remove(in core.Entity) error {
+func (s *Session) remove(in entity.Entity) error {
 	keys := getObjectKeys(in)
 
 	for _, key := range keys {

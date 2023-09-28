@@ -4,7 +4,8 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"github.com/MetalBlockchain/antelopevm/core"
+	"github.com/MetalBlockchain/antelopevm/chain/transaction"
+	"github.com/MetalBlockchain/antelopevm/chain/types"
 	"github.com/MetalBlockchain/antelopevm/crypto"
 	"github.com/MetalBlockchain/antelopevm/crypto/ecc"
 	"github.com/MetalBlockchain/antelopevm/utils"
@@ -20,30 +21,30 @@ func TestTransactionMerkleRootEven(t *testing.T) {
 	assert.NoError(t, err)
 	signature2, err := ecc.NewSignature("SIG_K1_JyThXTKQji3xAKEgK7v99vSQypFN9mJPuQcxy2A3hkCEw1ABpopNYV43Tqn8rAZRAYXZVP3WiXnEtv2rEzEzCcrHemxpgB")
 	assert.NoError(t, err)
-	receipt1 := core.TransactionReceipt{
-		TransactionReceiptHeader: core.TransactionReceiptHeader{
-			Status:        core.TransactionStatusExecuted,
+	receipt1 := transaction.TransactionReceipt{
+		TransactionReceiptHeader: transaction.TransactionReceiptHeader{
+			Status:        transaction.TransactionStatusExecuted,
 			CpuUsageUs:    268,
 			NetUsageWords: 16,
 		},
-		Transaction: core.PackedTransaction{
+		Transaction: transaction.PackedTransaction{
 			PackedTrx:             packed1,
-			Compression:           core.CompressionNone,
+			Compression:           transaction.CompressionNone,
 			Signatures:            []ecc.Signature{signature1},
-			PackedContextFreeData: make(core.HexBytes, 0),
+			PackedContextFreeData: make(types.HexBytes, 0),
 		},
 	}
-	receipt2 := core.TransactionReceipt{
-		TransactionReceiptHeader: core.TransactionReceiptHeader{
-			Status:        core.TransactionStatusExecuted,
+	receipt2 := transaction.TransactionReceipt{
+		TransactionReceiptHeader: transaction.TransactionReceiptHeader{
+			Status:        transaction.TransactionStatusExecuted,
 			CpuUsageUs:    213,
 			NetUsageWords: 15,
 		},
-		Transaction: core.PackedTransaction{
+		Transaction: transaction.PackedTransaction{
 			PackedTrx:             packed2,
-			Compression:           core.CompressionNone,
+			Compression:           transaction.CompressionNone,
 			Signatures:            []ecc.Signature{signature2},
-			PackedContextFreeData: make(core.HexBytes, 0),
+			PackedContextFreeData: make(types.HexBytes, 0),
 		},
 	}
 
@@ -67,17 +68,17 @@ func TestTransactionMerkleRootOdd(t *testing.T) {
 	assert.NoError(t, err)
 	signature2, err := ecc.NewSignature("SIG_K1_KaMx12aj799w33eq8pyQoi5iwdUuGV8BJ96xYtmUTnn2PsuuXZ9qdbfpiuMS3K8em6pRCD8AHSLHU4aJi22WPV52ErmKNk")
 	assert.NoError(t, err)
-	receipt1 := core.TransactionReceipt{
-		TransactionReceiptHeader: core.TransactionReceiptHeader{
-			Status:        core.TransactionStatusExecuted,
+	receipt1 := transaction.TransactionReceipt{
+		TransactionReceiptHeader: transaction.TransactionReceiptHeader{
+			Status:        transaction.TransactionStatusExecuted,
 			CpuUsageUs:    925,
 			NetUsageWords: 70,
 		},
-		Transaction: core.PackedTransaction{
+		Transaction: transaction.PackedTransaction{
 			PackedTrx:             packed1,
-			Compression:           core.CompressionNone,
+			Compression:           transaction.CompressionNone,
 			Signatures:            []ecc.Signature{signature1, signature2},
-			PackedContextFreeData: make(core.HexBytes, 0),
+			PackedContextFreeData: make(types.HexBytes, 0),
 		},
 	}
 	err = receipt1.Transaction.UnpackTransaction()

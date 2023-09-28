@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/MetalBlockchain/antelopevm/core/authority"
-	"github.com/MetalBlockchain/antelopevm/core/name"
+	"github.com/MetalBlockchain/antelopevm/chain/authority"
+	"github.com/MetalBlockchain/antelopevm/chain/name"
+	"github.com/MetalBlockchain/antelopevm/chain/time"
 	"github.com/MetalBlockchain/antelopevm/vm/service"
 	"github.com/gin-gonic/gin"
 )
@@ -68,13 +68,12 @@ func GetAccount(vm service.VM) gin.HandlerFunc {
 		session := vm.GetState().CreateSession(false)
 		defer session.Discard()
 		acc, err := session.FindAccountByName(name.StringToName(body.AccountName))
-
 		if err != nil {
 			c.JSON(404, service.NewError(404, "account not found"))
 			return
 		}
 
-		permissions := make([]*core.Permission, 0)
+		permissions := make([]*authority.Permission, 0)
 		iterator := session.FindPermissionsByOwner(acc.Name)
 		defer iterator.Close()
 
@@ -92,31 +91,37 @@ func GetAccount(vm service.VM) gin.HandlerFunc {
 			return
 		}
 
+		accountMetaData, err := session.FindAccountMetaDataByName(name.StringToName(body.AccountName))
+		if err != nil {
+			c.JSON(404, service.NewError(404, "account not found"))
+			return
+		}
+
 		response := GetAccountResponse{
 			AccountName: body.AccountName,
 			CpuLimit: Limit{
 				Available:           16346040,
 				CurrentUsed:         0,
-				LastUsageUpdateTime: core.Now().String(),
+				LastUsageUpdateTime: time.Now().String(),
 				Max:                 16346421,
 				Used:                381,
 			},
 			CpuWeight:         500000,
-			Created:           acc.CreationDate.String(),
+			Created:           acc.CreationDate.ToTimePoint().String(),
 			CoreLiquidBalance: "1000.0000 SYS",
 			HeadBlockNum:      0,
-			HeadBlockTime:     core.Now().String(),
-			LastCodeUpdate:    acc.LastCodeUpdate.String(),
+			HeadBlockTime:     time.Now().String(),
+			LastCodeUpdate:    accountMetaData.LastCodeUpdate.String(),
 			NetLimit: Limit{
 				Available:           88094630,
 				CurrentUsed:         0,
-				LastUsageUpdateTime: core.Now().String(),
+				LastUsageUpdateTime: time.Now().String(),
 				Max:                 88094878,
 				Used:                248,
 			},
 			NetWeight:   500000,
 			Permissions: make([]Permission, 0),
-			Privileged:  acc.Privileged,
+			Privileged:  accountMetaData.IsPrivileged(),
 			RamQuota:    525686,
 			RamUsage:    5544,
 			TotalResources: Resources{

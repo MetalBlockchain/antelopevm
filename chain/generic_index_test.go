@@ -3,10 +3,9 @@ package chain
 import (
 	"testing"
 
-	"github.com/MetalBlockchain/antelopevm/core/name"
+	"github.com/MetalBlockchain/antelopevm/chain/name"
 	"github.com/MetalBlockchain/antelopevm/state"
 	"github.com/dgraph-io/badger/v3"
-	"github.com/inconshreveable/log15"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -206,9 +205,6 @@ func TestIdx64Upperbound(t *testing.T) {
 			panic(err)
 		}
 	}
-
-	log15.Info("alice", "e", uint64(name.StringToName("alice")))
-	log15.Info("allyson", "e", uint64(name.StringToName("allyson")))
 
 	ubPrim := uint64(0)
 	ubSec := uint64(name.StringToName("alice"))

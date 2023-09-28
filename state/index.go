@@ -5,11 +5,15 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/MetalBlockchain/antelopevm/core/name"
+	"github.com/MetalBlockchain/antelopevm/chain/block"
+	"github.com/MetalBlockchain/antelopevm/chain/entity"
+	"github.com/MetalBlockchain/antelopevm/chain/name"
+	"github.com/MetalBlockchain/antelopevm/chain/time"
+	"github.com/MetalBlockchain/antelopevm/chain/transaction"
+	"github.com/MetalBlockchain/antelopevm/chain/types"
 )
 
-func getPartialKey(index string, obj core.Entity, values ...interface{}) []byte {
+func getPartialKey(index string, obj entity.Entity, values ...interface{}) []byte {
 	key := []byte{obj.GetObjectType()}
 	key = append(key, []byte("__"+index)...)
 
@@ -21,7 +25,7 @@ func getPartialKey(index string, obj core.Entity, values ...interface{}) []byte 
 	return key
 }
 
-func getObjectKeyByIndex(obj core.Entity, indexName string) []byte {
+func getObjectKeyByIndex(obj entity.Entity, indexName string) []byte {
 	fields := obj.GetIndexes()
 
 	if index, found := fields[indexName]; found {
@@ -41,7 +45,7 @@ func getObjectKeyByIndex(obj core.Entity, indexName string) []byte {
 	panic("invalid index")
 }
 
-func getObjectKeys(obj core.Entity) map[string][]byte {
+func getObjectKeys(obj entity.Entity) map[string][]byte {
 	fields := obj.GetIndexes()
 	keys := make(map[string][]byte)
 
@@ -54,23 +58,23 @@ func getObjectKeys(obj core.Entity) map[string][]byte {
 
 func encodeType(obj interface{}) []byte {
 	switch v := obj.(type) {
-	case core.IdType:
+	case types.IdType:
 		return v.ToBytes()
-	case core.TransactionIdType:
+	case transaction.TransactionIdType:
 		return v.Bytes()
 	case name.Name:
 		return v.Pack()
-	case core.BlockHash:
+	case block.BlockHash:
 		return v[:]
 	case uint64:
-		return core.IdType(v).ToBytes()
+		return types.IdType(v).ToBytes()
 	case bool:
 		if v {
 			return []byte{1}
 		}
 
 		return []byte{0}
-	case core.TimePointSec:
+	case time.TimePointSec:
 		a := make([]byte, 4)
 		binary.BigEndian.PutUint32(a, uint32(v))
 		return a

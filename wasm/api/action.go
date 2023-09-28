@@ -1,8 +1,6 @@
 package api
 
-import (
-	"github.com/MetalBlockchain/antelopevm/core/name"
-)
+import "github.com/MetalBlockchain/antelopevm/chain/name"
 
 func init() {
 	Functions["read_action_data"] = readActionData

@@ -1,11 +1,11 @@
 package state
 
 import (
-	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/MetalBlockchain/antelopevm/core/global"
+	"github.com/MetalBlockchain/antelopevm/chain/global"
+	"github.com/MetalBlockchain/antelopevm/chain/types"
 )
 
-func (s *Session) FindGlobalPropertyObject(id core.IdType) (*global.GlobalPropertyObject, error) {
+func (s *Session) FindGlobalPropertyObject(id types.IdType) (*global.GlobalPropertyObject, error) {
 	key := getObjectKeyByIndex(&global.GlobalPropertyObject{ID: id}, "id")
 	item, err := s.transaction.Get(key)
 
@@ -20,8 +20,7 @@ func (s *Session) FindGlobalPropertyObject(id core.IdType) (*global.GlobalProper
 	}
 
 	out := &global.GlobalPropertyObject{}
-
-	if _, err := out.UnmarshalMsg(data); err != nil {
+	if _, err := Codec.Unmarshal(data, out); err != nil {
 		return nil, err
 	}
 
@@ -29,7 +28,7 @@ func (s *Session) FindGlobalPropertyObject(id core.IdType) (*global.GlobalProper
 }
 
 func (s *Session) CreateGlobalPropertyObject(in *global.GlobalPropertyObject) error {
-	err := s.create(true, func(id core.IdType) error {
+	err := s.create(true, func(id types.IdType) error {
 		in.ID = id
 		return nil
 	}, in)

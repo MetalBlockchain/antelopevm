@@ -1,13 +1,6 @@
 package config
 
-import (
-	"github.com/MetalBlockchain/antelopevm/core/name"
-)
-
-type billableSize struct {
-	overhead uint64
-	value    uint64
-}
+import "github.com/MetalBlockchain/antelopevm/chain/name"
 
 var (
 	SystemAccountName         name.AccountName = name.StringToName("eosio")
@@ -38,22 +31,11 @@ var (
 	MinTransactionCpuUsage uint32 = 100
 	MaxTransactionCpuUsage uint32 = 150000
 
-	BillableAlignment uint64                  = 16
-	BillableSize      map[string]billableSize = map[string]billableSize{
-		"key_value_object":        {overhead: 32 * 2, value: 32 + 8 + 4 + 32*2},
-		"table_id_object":         {overhead: 32 * 2, value: 44 + 32*2},
-		"shared_authority":        {value: (3 * uint64(FixedOverheadSharedVectorRamBytes)) + 4},
-		"permission_object":       {overhead: 5 * 32, value: 64 + 64 + 5*32},
-		"permission_level_weight": {value: 24},
-		"key_weight":              {value: 8},
-		"wait_weight":             {value: 16},
-	}
-
 	FixedOverheadSharedVectorRamBytes uint32 = 16       ///< overhead accounts for fixed portion of size of shared_vector field
 	OverheadPerRowPerIndexRamBytes    uint32 = 32       ///< overhead accounts for basic tracking structures in a row per index
 	OverheadPerAccountRamBytes        uint32 = 2 * 1024 ///< overhead accounts for basic account storage and pre-pays features like account recovery
 
-	RateLimitingPrecision uint32 = 1000 * 1000
+	RateLimitingPrecision uint64 = 1000 * 1000
 
 	MinNetUsageDeltaBetweenBaseAndMaxForTrx uint32 = 10 * 1024
 
@@ -73,7 +55,3 @@ var (
 	// Producer parameters
 	MaxProducers int = 125
 )
-
-func GetBillableSize(kind string) uint64 {
-	return ((BillableSize[kind].value + BillableAlignment - 1) / BillableAlignment) * BillableAlignment
-}

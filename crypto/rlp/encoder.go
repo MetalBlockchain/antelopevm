@@ -52,6 +52,16 @@ func EncodeToBytes(val interface{}) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+func EncodeMultipleToBytes(values ...interface{}) ([]byte, error) {
+	buf := new(bytes.Buffer)
+	for _, value := range values {
+		if err := NewEncoder(buf).Encode(value); err != nil {
+			return nil, err
+		}
+	}
+	return buf.Bytes(), nil
+}
+
 func EncodeSize(val interface{}) (int, error) {
 	buffer, err := EncodeToBytes(val)
 	if err != nil {

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"math"
 	"reflect"
@@ -93,18 +92,19 @@ func init() {
 }
 
 func Decode(r io.Reader, val interface{}) error {
-	data, err := ioutil.ReadAll(r)
+	data, err := io.ReadAll(r)
 	if err != nil {
 		return err
 	}
+
 	return NewDecoder(data).Decode(val)
 }
 
 func DecodeBytes(b []byte, val interface{}) error {
-	err := NewDecoder(b).Decode(val)
-	if err != nil {
+	if err := NewDecoder(b).Decode(val); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -288,25 +288,22 @@ func (d *Decoder) Decode(v interface{}) (err error) {
 	default:
 		return errors.New("decode, unsupported type " + t.String())
 	}
-
-	return
 }
 
-func (d *Decoder) decodeStruct(v interface{}, t reflect.Type, rv reflect.Value) (err error) {
-	l := rv.NumField()
-	//rlplog.Warn("decode struct:   %s, length is %d", t.String(), l)
+func (d *Decoder) decodeStruct(value interface{}, valueType reflect.Type, reflectValue reflect.Value) (err error) {
+	l := reflectValue.NumField()
+
 	for i := 0; i < l; i++ {
-		switch t.Field(i).Tag.Get("eos") {
+		switch valueType.Field(i).Tag.Get("eos") {
 		case "-", "SVTag":
 			continue
 		case "optional":
-			isPresent, _ := d.ReadByte()
-			if isPresent == 0 {
-				//rlplog.Warn("Skipping optional OptionalProducerSchedule")
-				v = nil
+			if isPresent, err := d.ReadByte(); err != nil {
+				return err
+			} else if isPresent == 0 {
+				value = nil
 				continue
 			}
-
 		case "trxID":
 			d.destaticVariantTag, _ = d.ReadByte()
 		case "tag0":
@@ -317,10 +314,9 @@ func (d *Decoder) decodeStruct(v interface{}, t reflect.Type, rv reflect.Value) 
 			if d.destaticVariantTag != 0 {
 				continue
 			}
-
 		}
 
-		if v := rv.Field(i); v.CanSet() && t.Field(i).Name != "_" {
+		if v := reflectValue.Field(i); v.CanSet() && valueType.Field(i).Name != "_" {
 			iface := v.Addr().Interface()
 			if err = d.Decode(iface); err != nil {
 				return
@@ -524,42 +520,34 @@ func (d *Decoder) ReadFloat64() (out float64, err error) {
 	return
 }
 
-func (d *Decoder) ReadName() (out uint64, err error) {
-	n, err := d.ReadUint64()
-	return n, err
-}
-
-func (d *Decoder) ReadChecksum160() (out []byte, err error) {
+func (d *Decoder) ReadChecksum160() ([]byte, error) {
 	if d.remaining() < TypeSize.Checksum160 {
-		err = fmt.Errorf("checksum 160 required [%d] bytes, remaining [%d]", TypeSize.Checksum160, d.remaining())
-		return
+		return nil, fmt.Errorf("checksum 160 required [%d] bytes, remaining [%d]", TypeSize.Checksum160, d.remaining())
 	}
-	out = make([]byte, TypeSize.Checksum160)
+	out := make([]byte, TypeSize.Checksum160)
 	copy(out, d.data[d.pos:d.pos+TypeSize.Checksum160])
 	d.pos += TypeSize.Checksum160
-	return
+	return out, nil
 }
 
-func (d *Decoder) ReadChecksum256() (out []byte, err error) {
+func (d *Decoder) ReadChecksum256() ([]byte, error) {
 	if d.remaining() < TypeSize.Checksum256 {
-		err = fmt.Errorf("checksum 256 required [%d] bytes, remaining [%d]", TypeSize.Checksum256, d.remaining())
-		return
+		return nil, fmt.Errorf("checksum 256 required [%d] bytes, remaining [%d]", TypeSize.Checksum256, d.remaining())
 	}
-	out = make([]byte, TypeSize.Checksum256)
+	out := make([]byte, TypeSize.Checksum256)
 	copy(out, d.data[d.pos:d.pos+TypeSize.Checksum256])
 	d.pos += TypeSize.Checksum256
-	return
+	return out, nil
 }
 
-func (d *Decoder) ReadChecksum512() (out []byte, err error) {
+func (d *Decoder) ReadChecksum512() ([]byte, error) {
 	if d.remaining() < TypeSize.Checksum512 {
-		err = fmt.Errorf("checksum 512 required [%d] bytes, remaining [%d]", TypeSize.Checksum512, d.remaining())
-		return
+		return nil, fmt.Errorf("checksum 512 required [%d] bytes, remaining [%d]", TypeSize.Checksum512, d.remaining())
 	}
-	out = make([]byte, TypeSize.Checksum512)
+	out := make([]byte, TypeSize.Checksum512)
 	copy(out, d.data[d.pos:d.pos+TypeSize.Checksum512])
 	d.pos += TypeSize.Checksum512
-	return
+	return out, nil
 }
 
 func (d *Decoder) remaining() int {

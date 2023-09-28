@@ -1,18 +1,18 @@
 package state
 
 import (
-	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/MetalBlockchain/antelopevm/core/contract"
+	"github.com/MetalBlockchain/antelopevm/chain/table"
+	"github.com/MetalBlockchain/antelopevm/chain/types"
 	"github.com/MetalBlockchain/antelopevm/math"
 	"github.com/dgraph-io/badger/v3"
 )
 
-func (s *Session) FindIdx256Object(id core.IdType) (*contract.Index256Object, error) {
+func (s *Session) FindIdx256Object(id types.IdType) (*table.Index256Object, error) {
 	if obj, found := s.indexObjectCache.Get(id); found {
-		return obj.(*contract.Index256Object), nil
+		return obj.(*table.Index256Object), nil
 	}
 
-	key := getObjectKeyByIndex(&contract.Index256Object{ID: id}, "id")
+	key := getObjectKeyByIndex(&table.Index256Object{ID: id}, "id")
 	item, err := s.transaction.Get(key)
 
 	if err != nil {
@@ -25,9 +25,8 @@ func (s *Session) FindIdx256Object(id core.IdType) (*contract.Index256Object, er
 		return nil, err
 	}
 
-	out := &contract.Index256Object{}
-
-	if _, err := out.UnmarshalMsg(data); err != nil {
+	out := &table.Index256Object{}
+	if _, err := Codec.Unmarshal(data, out); err != nil {
 		return nil, err
 	}
 
@@ -36,8 +35,8 @@ func (s *Session) FindIdx256Object(id core.IdType) (*contract.Index256Object, er
 	return out, nil
 }
 
-func (s *Session) FindIdx256ObjectBySecondary(tableId core.IdType, secondaryKey math.Uint256) (*contract.Index256Object, error) {
-	key := getPartialKey("bySecondary", &contract.Index256Object{}, tableId, secondaryKey)
+func (s *Session) FindIdx256ObjectBySecondary(tableId types.IdType, secondaryKey math.Uint256) (*table.Index256Object, error) {
+	key := getPartialKey("bySecondary", &table.Index256Object{}, tableId, secondaryKey)
 	opts := badger.DefaultIteratorOptions
 	opts.Prefix = key
 	iterator := s.transaction.NewIterator(opts)
@@ -51,14 +50,14 @@ func (s *Session) FindIdx256ObjectBySecondary(tableId core.IdType, secondaryKey 
 			return nil, err
 		}
 
-		return s.FindIdx256Object(core.NewIdType(key))
+		return s.FindIdx256Object(types.NewIdType(key))
 	}
 
 	return nil, badger.ErrKeyNotFound
 }
 
-func (s *Session) FindIdx256ObjectByPrimary(tableId core.IdType, primaryKey uint64) (*contract.Index256Object, error) {
-	key := getObjectKeyByIndex(&contract.Index256Object{TableID: tableId, PrimaryKey: primaryKey}, "byPrimary")
+func (s *Session) FindIdx256ObjectByPrimary(tableId types.IdType, primaryKey uint64) (*table.Index256Object, error) {
+	key := getObjectKeyByIndex(&table.Index256Object{TableID: tableId, PrimaryKey: primaryKey}, "byPrimary")
 	opts := badger.DefaultIteratorOptions
 	opts.Prefix = key
 	iterator := s.transaction.NewIterator(opts)
@@ -72,14 +71,14 @@ func (s *Session) FindIdx256ObjectByPrimary(tableId core.IdType, primaryKey uint
 			return nil, err
 		}
 
-		return s.FindIdx256Object(core.NewIdType(key))
+		return s.FindIdx256Object(types.NewIdType(key))
 	}
 
 	return nil, badger.ErrKeyNotFound
 }
 
-func (s *Session) CreateIdx256Object(in *contract.Index256Object) error {
-	err := s.create(true, func(id core.IdType) error {
+func (s *Session) CreateIdx256Object(in *table.Index256Object) error {
+	err := s.create(true, func(id types.IdType) error {
 		in.ID = id
 		return nil
 	}, in)
@@ -93,7 +92,7 @@ func (s *Session) CreateIdx256Object(in *contract.Index256Object) error {
 	return nil
 }
 
-func (s *Session) ModifyIndex256Object(in *contract.Index256Object, modifyFunc func()) error {
+func (s *Session) ModifyIndex256Object(in *table.Index256Object, modifyFunc func()) error {
 	if err := s.modify(in, modifyFunc); err != nil {
 		return err
 	}
@@ -103,7 +102,7 @@ func (s *Session) ModifyIndex256Object(in *contract.Index256Object, modifyFunc f
 	return nil
 }
 
-func (s *Session) RemoveIndex256Object(in *contract.Index256Object) error {
+func (s *Session) RemoveIndex256Object(in *table.Index256Object) error {
 	if err := s.remove(in); err != nil {
 		return err
 	}
@@ -113,11 +112,11 @@ func (s *Session) RemoveIndex256Object(in *contract.Index256Object) error {
 	return nil
 }
 
-func (s *Session) LowerboundSecondaryIndex256(tableId core.IdType, secondary math.Uint256) (*contract.Index256Object, error) {
-	requiredPrefix := getPartialKey("bySecondary", &contract.Index256Object{}, tableId)
-	prefix := getPartialKey("bySecondary", &contract.Index256Object{}, tableId, secondary)
-	iterator := newIterator(s, requiredPrefix, func(b []byte) (*contract.Index256Object, error) {
-		return s.FindIdx256Object(core.NewIdType(b))
+func (s *Session) LowerboundSecondaryIndex256(tableId types.IdType, secondary math.Uint256) (*table.Index256Object, error) {
+	requiredPrefix := getPartialKey("bySecondary", &table.Index256Object{}, tableId)
+	prefix := getPartialKey("bySecondary", &table.Index256Object{}, tableId, secondary)
+	iterator := newIterator(s, requiredPrefix, func(b []byte) (*table.Index256Object, error) {
+		return s.FindIdx256Object(types.NewIdType(b))
 	})
 	defer iterator.Close()
 	iterator.Seek(prefix)
@@ -129,11 +128,11 @@ func (s *Session) LowerboundSecondaryIndex256(tableId core.IdType, secondary mat
 	return nil, badger.ErrKeyNotFound
 }
 
-func (s *Session) UpperboundSecondaryIndex256(values ...interface{}) (*contract.Index256Object, error) {
-	requiredPrefix := getPartialKey("bySecondary", &contract.Index256Object{}, values[:len(values)-1]...)
-	prefix := getPartialKey("bySecondary", &contract.Index256Object{}, values...)
-	iterator := newIterator(s, requiredPrefix, func(b []byte) (*contract.Index256Object, error) {
-		return s.FindIdx256Object(core.NewIdType(b))
+func (s *Session) UpperboundSecondaryIndex256(values ...interface{}) (*table.Index256Object, error) {
+	requiredPrefix := getPartialKey("bySecondary", &table.Index256Object{}, values[:len(values)-1]...)
+	prefix := getPartialKey("bySecondary", &table.Index256Object{}, values...)
+	iterator := newIterator(s, requiredPrefix, func(b []byte) (*table.Index256Object, error) {
+		return s.FindIdx256Object(types.NewIdType(b))
 	})
 	defer iterator.Close()
 	iterator.Seek(prefix)
@@ -150,7 +149,7 @@ func (s *Session) UpperboundSecondaryIndex256(values ...interface{}) (*contract.
 	return nil, badger.ErrKeyNotFound
 }
 
-func (s *Session) NextSecondaryIndex256(kv *contract.Index256Object) (*contract.Index256Object, error) {
+func (s *Session) NextSecondaryIndex256(kv *table.Index256Object) (*table.Index256Object, error) {
 	key := getObjectKeyByIndex(kv, "bySecondary")
 	opts := badger.DefaultIteratorOptions
 	opts.PrefetchSize = 2
@@ -166,10 +165,10 @@ func (s *Session) NextSecondaryIndex256(kv *contract.Index256Object) (*contract.
 		return nil, err
 	}
 
-	return s.FindIdx256Object(core.NewIdType(data))
+	return s.FindIdx256Object(types.NewIdType(data))
 }
 
-func (s *Session) PreviousSecondaryIndex256(kv *contract.Index256Object) (*contract.Index256Object, error) {
+func (s *Session) PreviousSecondaryIndex256(kv *table.Index256Object) (*table.Index256Object, error) {
 	key := getObjectKeyByIndex(kv, "bySecondary")
 	opts := badger.DefaultIteratorOptions
 	opts.PrefetchSize = 2
@@ -186,7 +185,7 @@ func (s *Session) PreviousSecondaryIndex256(kv *contract.Index256Object) (*contr
 		return nil, err
 	}
 
-	out, err := s.FindIdx256Object(core.NewIdType(data))
+	out, err := s.FindIdx256Object(types.NewIdType(data))
 
 	if err != nil {
 		return nil, err
@@ -195,10 +194,10 @@ func (s *Session) PreviousSecondaryIndex256(kv *contract.Index256Object) (*contr
 	return out, nil
 }
 
-func (s *Session) LowerboundPrimaryIndex256(tableId core.IdType, primary uint64) (*contract.Index256Object, error) {
-	requiredPrefix := getPartialKey("byPrimary", &contract.Index256Object{}, tableId, primary)
-	iterator := newIterator(s, requiredPrefix, func(b []byte) (*contract.Index256Object, error) {
-		return s.FindIdx256Object(core.NewIdType(b))
+func (s *Session) LowerboundPrimaryIndex256(tableId types.IdType, primary uint64) (*table.Index256Object, error) {
+	requiredPrefix := getPartialKey("byPrimary", &table.Index256Object{}, tableId, primary)
+	iterator := newIterator(s, requiredPrefix, func(b []byte) (*table.Index256Object, error) {
+		return s.FindIdx256Object(types.NewIdType(b))
 	})
 	defer iterator.Close()
 	iterator.Seek(requiredPrefix)
@@ -210,10 +209,10 @@ func (s *Session) LowerboundPrimaryIndex256(tableId core.IdType, primary uint64)
 	return nil, badger.ErrKeyNotFound
 }
 
-func (s *Session) UpperboundPrimaryIndex256(values ...interface{}) (*contract.Index256Object, error) {
-	requiredPrefix := getPartialKey("byPrimary", &contract.Index256Object{}, values...)
-	iterator := newReverseIterator(s, requiredPrefix, func(b []byte) (*contract.Index256Object, error) {
-		return s.FindIdx256Object(core.NewIdType(b))
+func (s *Session) UpperboundPrimaryIndex256(values ...interface{}) (*table.Index256Object, error) {
+	requiredPrefix := getPartialKey("byPrimary", &table.Index256Object{}, values...)
+	iterator := newReverseIterator(s, requiredPrefix, func(b []byte) (*table.Index256Object, error) {
+		return s.FindIdx256Object(types.NewIdType(b))
 	})
 	defer iterator.Close()
 	iterator.Seek(requiredPrefix)
@@ -225,7 +224,7 @@ func (s *Session) UpperboundPrimaryIndex256(values ...interface{}) (*contract.In
 	return nil, badger.ErrKeyNotFound
 }
 
-func (s *Session) NextPrimaryIndex256(kv *contract.Index256Object) (*contract.Index256Object, error) {
+func (s *Session) NextPrimaryIndex256(kv *table.Index256Object) (*table.Index256Object, error) {
 	key := getObjectKeyByIndex(kv, "byPrimary")
 	opts := badger.DefaultIteratorOptions
 	opts.PrefetchSize = 2
@@ -241,10 +240,10 @@ func (s *Session) NextPrimaryIndex256(kv *contract.Index256Object) (*contract.In
 		return nil, err
 	}
 
-	return s.FindIdx256Object(core.NewIdType(data))
+	return s.FindIdx256Object(types.NewIdType(data))
 }
 
-func (s *Session) PreviousPrimaryIndex256(kv *contract.Index256Object) (*contract.Index256Object, error) {
+func (s *Session) PreviousPrimaryIndex256(kv *table.Index256Object) (*table.Index256Object, error) {
 	key := getObjectKeyByIndex(kv, "byPrimary")
 	opts := badger.DefaultIteratorOptions
 	opts.PrefetchSize = 2
@@ -261,5 +260,5 @@ func (s *Session) PreviousPrimaryIndex256(kv *contract.Index256Object) (*contrac
 		return nil, err
 	}
 
-	return s.FindIdx256Object(core.NewIdType(data))
+	return s.FindIdx256Object(types.NewIdType(data))
 }

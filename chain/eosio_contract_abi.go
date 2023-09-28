@@ -1,8 +1,8 @@
 package chain
 
 import (
-	"github.com/MetalBlockchain/antelopevm/abi"
-	"github.com/MetalBlockchain/antelopevm/core/name"
+	"github.com/MetalBlockchain/antelopevm/chain/abi"
+	"github.com/MetalBlockchain/antelopevm/chain/name"
 )
 
 func CommonTypeDefs() []abi.TypeDef {

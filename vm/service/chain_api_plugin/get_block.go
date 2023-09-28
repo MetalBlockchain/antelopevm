@@ -6,7 +6,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/MetalBlockchain/antelopevm/core"
+	"github.com/MetalBlockchain/antelopevm/chain/block"
+	"github.com/MetalBlockchain/antelopevm/chain/transaction"
 	"github.com/MetalBlockchain/antelopevm/state"
 	"github.com/MetalBlockchain/antelopevm/vm/service"
 	"github.com/MetalBlockchain/metalgo/ids"
@@ -36,25 +37,25 @@ type GetBlockRequest struct {
 }
 
 type GetBlockResponse struct {
-	Timestamp    string                    `json:"timestamp"`
-	Producer     string                    `json:"producer"`
-	Confirmed    int                       `json:"confirmed"`
-	Previous     string                    `json:"previous"`
-	ID           string                    `json:"id"`
-	BlockNum     uint64                    `json:"block_num"`
-	Transactions []core.TransactionReceipt `json:"transactions"`
+	Timestamp    string                           `json:"timestamp"`
+	Producer     string                           `json:"producer"`
+	Confirmed    int                              `json:"confirmed"`
+	Previous     string                           `json:"previous"`
+	ID           string                           `json:"id"`
+	BlockNum     uint64                           `json:"block_num"`
+	Transactions []transaction.TransactionReceipt `json:"transactions"`
 }
 
 func NewGetBlockResponse(block *state.Block) GetBlockResponse {
-	transactions := append([]core.TransactionReceipt{}, block.Transactions...)
+	transactions := append([]transaction.TransactionReceipt{}, block.Transactions...)
 
 	return GetBlockResponse{
-		Timestamp:    block.Header.Created.String(),
+		Timestamp:    block.Header.Timestamp.ToTimePoint().String(),
 		Producer:     "eosio",
 		Confirmed:    1,
-		Previous:     block.Header.PreviousBlockHash.Hex(),
+		Previous:     block.Header.Previous.String(),
 		ID:           block.ID().Hex(),
-		BlockNum:     block.Header.Index,
+		BlockNum:     uint64(block.Header.BlockNum()),
 		Transactions: transactions,
 	}
 }
@@ -100,7 +101,7 @@ func GetBlock(vm service.VM) gin.HandlerFunc {
 			return
 		}
 
-		block, err := session.FindBlockByHash(core.BlockHash(blockID))
+		block, err := session.FindBlockByHash(block.BlockHash(blockID))
 
 		if err != nil {
 			c.JSON(400, service.NewError(400, "could not parse block num"))

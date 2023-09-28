@@ -4,14 +4,20 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/MetalBlockchain/antelopevm/chain/account"
+	"github.com/MetalBlockchain/antelopevm/chain/authority"
+	"github.com/MetalBlockchain/antelopevm/chain/block"
+	"github.com/MetalBlockchain/antelopevm/chain/fc"
+	"github.com/MetalBlockchain/antelopevm/chain/global"
+	"github.com/MetalBlockchain/antelopevm/chain/name"
+	"github.com/MetalBlockchain/antelopevm/chain/time"
+	"github.com/MetalBlockchain/antelopevm/chain/transaction"
+	"github.com/MetalBlockchain/antelopevm/chain/types"
 	"github.com/MetalBlockchain/antelopevm/config"
-	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/MetalBlockchain/antelopevm/core/account"
-	"github.com/MetalBlockchain/antelopevm/core/authority"
-	"github.com/MetalBlockchain/antelopevm/core/global"
-	"github.com/MetalBlockchain/antelopevm/core/name"
-	"github.com/MetalBlockchain/antelopevm/core/transaction"
+	"github.com/MetalBlockchain/antelopevm/crypto"
+	"github.com/MetalBlockchain/antelopevm/crypto/ecc"
 	"github.com/MetalBlockchain/antelopevm/state"
+	"github.com/MetalBlockchain/antelopevm/utils"
 	"github.com/MetalBlockchain/antelopevm/wasm/api"
 	log "github.com/inconshreveable/log15"
 )
@@ -22,23 +28,31 @@ var _ api.Controller = &Controller{}
 
 type Controller struct {
 	ApplyHandlers map[string]v
-	ChainId       core.ChainIdType
+	ChainId       types.ChainIdType
 	State         *state.State
 
-	contractWhitelist map[name.AccountName]bool
-	contractBlacklist map[name.AccountName]bool
+	ActorWhitelist    name.NameSet
+	ActorBlacklist    name.NameSet
+	ContractWhitelist name.NameSet
+	ContractBlacklist name.NameSet
+	KeyBlackist       ecc.PublicKeySet
+	ReadOnly          bool
 
 	transactionMutex sync.Mutex
 }
 
-func NewController(chainId core.ChainIdType, state *state.State) *Controller {
+func NewController(chainId types.ChainIdType, state *state.State) *Controller {
 	controller := &Controller{
 		ApplyHandlers: make(map[string]v),
 		ChainId:       chainId,
 		State:         state,
 
-		contractWhitelist: make(map[name.AccountName]bool),
-		contractBlacklist: make(map[name.AccountName]bool),
+		ActorWhitelist:    name.NewNameSet(0),
+		ActorBlacklist:    name.NewNameSet(0),
+		ContractWhitelist: name.NewNameSet(0),
+		ContractBlacklist: name.NewNameSet(0),
+		KeyBlackist:       ecc.NewPublicKeySet(0),
+		ReadOnly:          false,
 	}
 
 	// Add native functions
@@ -53,7 +67,13 @@ func NewController(chainId core.ChainIdType, state *state.State) *Controller {
 	return controller
 }
 
-func (c *Controller) InitGenesis(session *state.Session, genesisConfig *GenesisFile) error {
+func (c *Controller) InitializeBlockchainState(genesis *GenesisState) error {
+	log.Info("initializing new blockchain with genesis state")
+
+	return nil
+}
+
+func (c *Controller) InitGenesis(session *state.Session, genesisConfig *GenesisState) error {
 	// Validate the genesis configuration
 	if err := genesisConfig.InitialConfiguration.Validate(); err != nil {
 		return err
@@ -136,16 +156,15 @@ func (c *Controller) GetResourceLimitsManager(s *state.Session) *ResourceLimitsM
 	return NewResourceLimitsManager(s)
 }
 
-func (c *Controller) CreateNativeAccount(session *state.Session, initialTimestamp core.TimePoint, name name.AccountName, owner authority.Authority, active authority.Authority, privileged bool) error {
+func (c *Controller) CreateNativeAccount(session *state.Session, initialTimestamp time.TimePoint, name name.AccountName, owner authority.Authority, active authority.Authority, privileged bool) error {
 	// Don't create account if it exists
 	if existingAcc, _ := session.FindAccountByName(name); existingAcc != nil {
 		return nil
 	}
 
-	account := account.Account{
+	acc := account.Account{
 		Name:         name,
-		Privileged:   privileged,
-		CreationDate: initialTimestamp,
+		CreationDate: block.NewBlockTimeStampFromTimePoint(initialTimestamp),
 	}
 
 	if name == config.SystemAccountName {
@@ -156,11 +175,18 @@ func (c *Controller) CreateNativeAccount(session *state.Session, initialTimestam
 			return err
 		}
 
-		account.Abi = abiBytes
-		account.AbiSequence = 1
+		acc.Abi = abiBytes
 	}
 
-	if err := session.CreateAccount(&account); err != nil {
+	if err := session.CreateAccount(&acc); err != nil {
+		return err
+	}
+
+	accountMetaData := account.AccountMetaDataObject{
+		Name: name,
+	}
+	accountMetaData.SetPrivileged(privileged)
+	if err := session.CreateAccountMetaData(&accountMetaData); err != nil {
 		return err
 	}
 
@@ -184,7 +210,7 @@ func (c *Controller) CreateNativeAccount(session *state.Session, initialTimestam
 	}
 
 	var ramDelta int64 = int64(config.OverheadPerAccountRamBytes)
-	ramDelta += 2 * int64(config.GetBillableSize("permission_object"))
+	ramDelta += 2 * int64(authority.PermissionObjectBillableSize)
 	ramDelta += int64(ownerPermission.Auth.GetBillableSize())
 	ramDelta += int64(activePermission.Auth.GetBillableSize())
 
@@ -214,7 +240,7 @@ func (c *Controller) FindApplyHandler(receiver name.AccountName, scope name.Acco
 	return nil
 }
 
-func (c *Controller) PushTransaction(trx transaction.TransactionMetaData, block *state.Block, session *state.Session) (*core.TransactionTrace, error) {
+func (c *Controller) PushTransaction(trx transaction.TransactionMetaData, block *state.Block, session *state.Session) (*transaction.TransactionTrace, error) {
 	c.transactionMutex.Lock()
 	defer c.transactionMutex.Unlock()
 	//start := core.Now()
@@ -225,7 +251,7 @@ func (c *Controller) PushTransaction(trx transaction.TransactionMetaData, block 
 		return nil, err
 	}
 
-	trxContext := NewTransactionContext(c, session, trx.PackedTrx(), trx.Id(), block)
+	trxContext := NewTransactionContext(c, session, trx.PackedTrx(), *trx.Id(), block)
 
 	if trx.Implicit() {
 		if err := trxContext.InitForImplicitTransaction(0); err != nil {
@@ -257,12 +283,12 @@ func (c *Controller) PushTransaction(trx transaction.TransactionMetaData, block 
 		return nil, err
 	}
 
-	trxContext.Trace.Hash = trx.Id()
-	trxContext.Trace.Receipt = core.TransactionReceipt{
-		TransactionReceiptHeader: core.TransactionReceiptHeader{
-			Status:        core.TransactionStatusExecuted,
+	trxContext.Trace.Hash = *trx.Id()
+	trxContext.Trace.Receipt = transaction.TransactionReceipt{
+		TransactionReceiptHeader: transaction.TransactionReceiptHeader{
+			Status:        transaction.TransactionStatusExecuted,
 			CpuUsageUs:    uint32(trxContext.BilledCpuTimeUs),
-			NetUsageWords: core.Vuint32(0),
+			NetUsageWords: fc.UnsignedInt(0),
 		},
 		Transaction: *trx.PackedTrx(),
 	}
@@ -271,12 +297,12 @@ func (c *Controller) PushTransaction(trx transaction.TransactionMetaData, block 
 }
 
 func (c *Controller) CheckContractList(code name.AccountName) error {
-	if len(c.contractWhitelist) > 0 {
-		if _, found := c.contractWhitelist[code]; !found {
+	if c.ContractWhitelist.Size() > 0 {
+		if !c.ContractWhitelist.Contains(code) {
 			return fmt.Errorf("account %s is not on the contract whitelist", code)
 		}
-	} else if len(c.contractBlacklist) > 0 {
-		if _, found := c.contractBlacklist[code]; found {
+	} else if c.ContractBlacklist.Size() > 0 {
+		if c.ContractBlacklist.Contains(code) {
 			return fmt.Errorf("account %s is on the contract blacklist", code)
 		}
 	}
@@ -284,15 +310,31 @@ func (c *Controller) CheckContractList(code name.AccountName) error {
 	return nil
 }
 
-func (c *Controller) PendingBlockTime() core.TimePoint {
-	return core.Now()
+func (c *Controller) PendingBlockTime() time.TimePoint {
+	return time.Now()
 }
 
-func (c *Controller) GetChainId() core.ChainIdType {
+func (c *Controller) GetChainId() types.ChainIdType {
 	return c.ChainId
 }
 
 // Only eosio for now
 func (c *Controller) GetActiveProducers() ([]name.Name, error) {
 	return []name.Name{config.SystemAccountName}, nil
+}
+
+func (c *Controller) CalculateTransactionMerkle(trxs []transaction.TransactionReceipt) (*crypto.Sha256, error) {
+	digests := make([]crypto.Sha256, 0)
+
+	for _, trx := range trxs {
+		if digest, err := trx.Digest(); err != nil {
+			return nil, err
+		} else {
+			digests = append(digests, *digest)
+		}
+	}
+
+	merkle := utils.Merkle(digests)
+
+	return &merkle, nil
 }

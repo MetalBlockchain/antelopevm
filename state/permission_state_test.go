@@ -3,9 +3,9 @@ package state
 import (
 	"testing"
 
-	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/MetalBlockchain/antelopevm/core/authority"
-	"github.com/MetalBlockchain/antelopevm/core/name"
+	"github.com/MetalBlockchain/antelopevm/chain/authority"
+	"github.com/MetalBlockchain/antelopevm/chain/name"
+	"github.com/MetalBlockchain/antelopevm/chain/time"
 	"github.com/MetalBlockchain/antelopevm/crypto/ecc"
 	"github.com/dgraph-io/badger/v3"
 	"github.com/stretchr/testify/assert"
@@ -16,12 +16,12 @@ func TestPermissionState(t *testing.T) {
 	assert.NoError(t, err)
 	state := NewState(nil, db)
 	session := state.CreateSession(true)
-	permission := &core.Permission{
+	permission := &authority.Permission{
 		Parent:      0,
 		Owner:       name.StringToName("glenn"),
 		Name:        name.StringToName("owner"),
-		LastUpdated: core.Now(),
-		LastUsed:    core.Now(),
+		LastUpdated: time.Now(),
+		LastUsed:    time.Now(),
 		Auth: authority.Authority{
 			Threshold: 1,
 			Keys: []authority.KeyWeight{
@@ -33,12 +33,12 @@ func TestPermissionState(t *testing.T) {
 		},
 	}
 	session.CreatePermission(permission)
-	permission2 := &core.Permission{
+	permission2 := &authority.Permission{
 		Parent:      permission.ID,
-		LastUsed:    core.Now(),
+		LastUsed:    time.Now(),
 		Owner:       name.StringToName("glenn"),
 		Name:        name.StringToName("active"),
-		LastUpdated: core.Now(),
+		LastUpdated: time.Now(),
 		Auth: authority.Authority{
 			Threshold: 1,
 			Keys: []authority.KeyWeight{

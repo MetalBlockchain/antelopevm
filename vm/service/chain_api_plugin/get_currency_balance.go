@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/MetalBlockchain/antelopevm/core/name"
+	"github.com/MetalBlockchain/antelopevm/chain/asset"
+	"github.com/MetalBlockchain/antelopevm/chain/name"
 	"github.com/MetalBlockchain/antelopevm/crypto/rlp"
 	"github.com/MetalBlockchain/antelopevm/vm/service"
 	"github.com/gin-gonic/gin"
@@ -30,7 +30,7 @@ func GetCurrencyBalance(vm service.VM) gin.HandlerFunc {
 		json.NewDecoder(c.Request.Body).Decode(&body)
 		session := vm.GetState().CreateSession(false)
 		defer session.Discard()
-		results := make([]core.Asset, 0)
+		results := make([]asset.Asset, 0)
 
 		table, err := session.FindTableByCodeScopeTable(body.Code, body.Account, name.StringToName("accounts"))
 
@@ -46,7 +46,7 @@ func GetCurrencyBalance(vm service.VM) gin.HandlerFunc {
 			item, err := iterator.Item()
 
 			if err == nil {
-				asset := core.Asset{}
+				asset := asset.Asset{}
 
 				if err := rlp.DecodeBytes(item.Value, &asset); err == nil {
 

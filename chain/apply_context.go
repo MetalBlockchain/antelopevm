@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/MetalBlockchain/antelopevm/chain/account"
+	"github.com/MetalBlockchain/antelopevm/chain/authority"
+	"github.com/MetalBlockchain/antelopevm/chain/fc"
+	"github.com/MetalBlockchain/antelopevm/chain/name"
+	"github.com/MetalBlockchain/antelopevm/chain/table"
+	"github.com/MetalBlockchain/antelopevm/chain/time"
+	"github.com/MetalBlockchain/antelopevm/chain/transaction"
 	"github.com/MetalBlockchain/antelopevm/config"
-	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/MetalBlockchain/antelopevm/core/account"
-	"github.com/MetalBlockchain/antelopevm/core/authority"
-	"github.com/MetalBlockchain/antelopevm/core/name"
 	"github.com/MetalBlockchain/antelopevm/crypto"
 	"github.com/MetalBlockchain/antelopevm/crypto/ecc"
 	"github.com/MetalBlockchain/antelopevm/state"
@@ -33,9 +36,9 @@ type Notified struct {
 type ApplyContext interface {
 	GetSession() *state.Session
 	GetAuthorizationManager() *AuthorizationManager
-
-	GetAction() core.Action
+	GetAction() transaction.Action
 	RequireAuthorization(name.AccountName) error
+	AddRamUsage(account name.AccountName, delta int64)
 }
 
 type applyContext struct {
@@ -44,8 +47,8 @@ type applyContext struct {
 	RecurseDepth               uint32
 	FirstReceiverActionOrdinal int
 	ActionOrdinal              int
-	Trace                      *core.ActionTrace
-	Act                        *core.Action
+	Trace                      *transaction.ActionTrace
+	Act                        *transaction.Action
 	Receiver                   name.AccountName
 	ContextFree                bool
 	ConsoleOutput              string
@@ -91,7 +94,7 @@ func NewApplyContext(trxContext *TransactionContext, actionOrdinal int, recurseD
 		ContextFree:        trace.ContextFree,
 		Privileged:         false,
 		UsedContestFreeApi: false,
-		AccountRamDeltas:   make(map[name.Name]int64),
+		AccountRamDeltas:   make(map[name.AccountName]int64),
 		ActionReturnValue:  make([]byte, 0),
 
 		KeyValueCache: NewIteratorCache(),
@@ -160,14 +163,13 @@ func (a *applyContext) Exec() error {
 }
 
 func (a *applyContext) execOne() error {
-	start := core.Now()
-	receiverAccount, err := a.Session.FindAccountByName(a.Receiver)
-
+	start := time.Now()
+	receiverAccount, err := a.Session.FindAccountMetaDataByName(a.Receiver)
 	if err != nil {
 		return fmt.Errorf("could not find receiver account: %v", err)
 	}
 
-	a.Privileged = receiverAccount.Privileged
+	a.Privileged = receiverAccount.IsPrivileged()
 
 	if !a.ContextFree {
 		native := a.Control.FindApplyHandler(a.Receiver, a.Act.Account, a.Act.Name)
@@ -178,7 +180,7 @@ func (a *applyContext) execOne() error {
 			}
 		}
 
-		if receiverAccount.Code.Size() > 0 && !(a.Act.Account == config.SystemAccountName && a.Act.Name == name.StringToName("setcode") && a.Receiver == config.SystemAccountName) {
+		if !receiverAccount.CodeHash.IsEmpty() && !(a.Act.Account == config.SystemAccountName && a.Act.Name == name.StringToName("setcode") && a.Receiver == config.SystemAccountName) {
 			// Check contract blacklist
 			if err := a.Control.CheckContractList(receiverAccount.Name); err != nil {
 				return err
@@ -187,8 +189,14 @@ func (a *applyContext) execOne() error {
 			a.TrxContext.PauseBillingTimer()
 			module := wasm.NewWasmExecutionContext(context.Background(), a.Control, a.TrxContext, a, a.Authorization, a.GetMutableResourceLimitsManager(), a.Idx64, a.Idx128, a.Idx256, a.IdxDouble, a.IdxLongDouble)
 
+			// Fetch code object
+			code, err := a.Session.FindCodeObjectByCodeHash(receiverAccount.CodeHash, receiverAccount.VmType, receiverAccount.VmVersion)
+			if err != nil {
+				return err
+			}
+
 			// Run the WASM contract
-			if err := module.Exec(receiverAccount.Code); err != nil {
+			if err := module.Exec(code.Code); err != nil {
 				return err
 			}
 
@@ -203,20 +211,20 @@ func (a *applyContext) execOne() error {
 		return err
 	}
 
-	receipt := core.ActionReceipt{
+	receipt := transaction.ActionReceipt{
 		Receiver:       a.Receiver,
 		ActDigest:      *crypto.Hash256(a.Act),
 		GlobalSequence: 1,
 		RecvSequence:   *recvSequence,
-		AuthSequence:   core.NewAuthSequenceSet(),
+		AuthSequence:   authority.NewAuthSequenceSet(),
 	}
 
-	var firstReceiverAccount *account.Account
+	var firstReceiverAccount *account.AccountMetaDataObject
 
 	if a.Act.Account == receiverAccount.Name {
 		firstReceiverAccount = receiverAccount
 	} else {
-		firstReceiverAccount, err = a.Session.FindAccountByName(a.Act.Account)
+		firstReceiverAccount, err = a.Session.FindAccountMetaDataByName(a.Act.Account)
 
 		if err != nil {
 			return fmt.Errorf("could not find account by name %s", a.Act.Account)
@@ -225,8 +233,8 @@ func (a *applyContext) execOne() error {
 		}
 	}
 
-	receipt.CodeSequence = core.Vuint32(firstReceiverAccount.CodeSequence)
-	receipt.AbiSequence = core.Vuint32(firstReceiverAccount.AbiSequence)
+	receipt.CodeSequence = fc.UnsignedInt(firstReceiverAccount.CodeSequence)
+	receipt.AbiSequence = fc.UnsignedInt(firstReceiverAccount.AbiSequence)
 
 	for _, k := range a.Act.Authorization {
 		if authSequence, err := a.NextAuthSequence(k.Actor); err == nil {
@@ -244,7 +252,7 @@ func (a *applyContext) execOne() error {
 	return nil
 }
 
-func (a *applyContext) ExecuteInline(action core.Action) error {
+func (a *applyContext) ExecuteInline(action transaction.Action) error {
 	if _, err := a.Session.FindAccountByName(action.Account); err != nil {
 		return fmt.Errorf("inline action's code account %s does not exist", action.Account)
 	}
@@ -275,7 +283,7 @@ func (a *applyContext) ExecuteInline(action core.Action) error {
 	if !a.Privileged {
 		auth := authority.PermissionLevel{Actor: a.Receiver, Permission: config.EosioCodeName}
 
-		if err := a.Authorization.CheckAuthorization([]*core.Action{&action}, ecc.NewPublicKeySet(0), []authority.PermissionLevel{auth}, false, inheritedAuthorizations); err != nil {
+		if err := a.Authorization.CheckAuthorization([]*transaction.Action{&action}, ecc.NewPublicKeySet(0), []authority.PermissionLevel{auth}, false, inheritedAuthorizations); err != nil {
 			return fmt.Errorf("authorization failure with inline action")
 		}
 	}
@@ -289,12 +297,12 @@ func (a *applyContext) ExecuteInline(action core.Action) error {
 	return nil
 }
 
-func (a *applyContext) FinalizeTrace(trace *core.ActionTrace, start core.TimePoint) {
-	trace.Elapsed = uint64(core.Now() - start)
-	trace.AccountRamDeltas = make([]core.RamDelta, len(trace.AccountRamDeltas))
+func (a *applyContext) FinalizeTrace(trace *transaction.ActionTrace, start time.TimePoint) {
+	trace.Elapsed = uint64(time.Now() - start)
+	trace.AccountRamDeltas = make([]transaction.RamDelta, len(trace.AccountRamDeltas))
 
 	for account, delta := range a.AccountRamDeltas {
-		trace.AccountRamDeltas = append(trace.AccountRamDeltas, core.RamDelta{
+		trace.AccountRamDeltas = append(trace.AccountRamDeltas, transaction.RamDelta{
 			Account: account,
 			Delta:   delta,
 		})
@@ -319,7 +327,7 @@ func (a *applyContext) ScheduleAction(ordinalOfActionToSchedule int, receiver na
 	return scheduledActionOrdinal, nil
 }
 
-func (a *applyContext) ScheduleActionByAction(actionToSchedule core.Action, receiver name.AccountName, contextFree bool) (*int, error) {
+func (a *applyContext) ScheduleActionByAction(actionToSchedule transaction.Action, receiver name.AccountName, contextFree bool) (*int, error) {
 	scheduledActionOrdinal := a.TrxContext.ScheduleAction(actionToSchedule, receiver, contextFree, a.ActionOrdinal)
 	actionTrace, err := a.TrxContext.GetActionTrace(a.ActionOrdinal)
 
@@ -422,13 +430,12 @@ func (a *applyContext) IncrementActionId() {
 }
 
 func (a *applyContext) NextRecvSequence(accountName name.AccountName) (*uint64, error) {
-	account, err := a.Session.FindAccountByName(accountName)
-
+	account, err := a.Session.FindAccountMetaDataByName(accountName)
 	if err != nil {
 		return nil, fmt.Errorf("could not find account %s", accountName)
 	}
 
-	err = a.Session.ModifyAccount(account, func() {
+	err = a.Session.ModifyAccountMetaData(account, func() {
 		account.RecvSequence = account.RecvSequence + 1
 	})
 
@@ -440,13 +447,12 @@ func (a *applyContext) NextRecvSequence(accountName name.AccountName) (*uint64, 
 }
 
 func (a *applyContext) NextAuthSequence(accountName name.AccountName) (uint64, error) {
-	account, err := a.Session.FindAccountByName(accountName)
-
+	account, err := a.Session.FindAccountMetaDataByName(accountName)
 	if err != nil {
 		return 0, fmt.Errorf("could not find account %s", accountName)
 	}
 
-	err = a.Session.ModifyAccount(account, func() {
+	err = a.Session.ModifyAccountMetaData(account, func() {
 		account.AuthSequence += 1
 	})
 
@@ -457,7 +463,7 @@ func (a *applyContext) NextAuthSequence(accountName name.AccountName) (uint64, e
 	return account.AuthSequence, nil
 }
 
-func (a *applyContext) GetAction() core.Action {
+func (a *applyContext) GetAction() transaction.Action {
 	return *a.Act
 }
 
@@ -481,14 +487,14 @@ func (a *applyContext) FindI64(code name.AccountName, scope name.ScopeName, tabl
 }
 
 func (a *applyContext) StoreI64(code name.AccountName, scope name.ScopeName, tableName name.TableName, payer name.AccountName, primaryKey uint64, buffer []byte) (int, error) {
-	table, err := a.Session.FindOrCreateTable(code, scope, tableName, payer)
+	tab, err := a.Session.FindOrCreateTable(code, scope, tableName, payer)
 
 	if err != nil {
 		return 0, fmt.Errorf("failed to find or create table: %v", err)
 	}
 
-	keyValue := &core.KeyValue{
-		TableID:    table.ID,
+	keyValue := &table.KeyValue{
+		TableID:    tab.ID,
 		PrimaryKey: primaryKey,
 		Payer:      payer,
 		Value:      buffer,
@@ -499,23 +505,23 @@ func (a *applyContext) StoreI64(code name.AccountName, scope name.ScopeName, tab
 		return 0, fmt.Errorf("failed to insert kv object: %v", err)
 	}
 
-	if err := a.Session.ModifyTable(table, func() {
-		table.Count = table.Count + 1
+	if err := a.Session.ModifyTable(tab, func() {
+		tab.Count = tab.Count + 1
 	}); err != nil {
 		return 0, fmt.Errorf("failed to update table: %v", err)
 	}
 
-	billableSize := uint64(len(buffer)) + config.GetBillableSize("key_value_object")
+	billableSize := uint64(len(buffer)) + table.KeyValueObjectBillableSize
 	a.UpdateDatabaseUsage(payer, int64(billableSize))
 
-	a.KeyValueCache.cacheTable(table)
+	a.KeyValueCache.cacheTable(tab)
 	iterator := a.KeyValueCache.add(keyValue)
 
 	return iterator, nil
 }
 
 func (a *applyContext) GetI64(iterator int, buffer []byte, bufferSize int) (int, error) {
-	obj := (a.KeyValueCache.get(iterator)).(*core.KeyValue)
+	obj := (a.KeyValueCache.get(iterator)).(*table.KeyValue)
 	size := len(obj.Value)
 
 	if bufferSize == 0 {
@@ -529,14 +535,14 @@ func (a *applyContext) GetI64(iterator int, buffer []byte, bufferSize int) (int,
 }
 
 func (a *applyContext) UpdateI64(iterator int, payer name.AccountName, buffer []byte, bufferSize int) error {
-	obj := (a.KeyValueCache.get(iterator)).(*core.KeyValue)
-	table := a.KeyValueCache.tableCache[obj.TableID]
+	obj := (a.KeyValueCache.get(iterator)).(*table.KeyValue)
+	tab := a.KeyValueCache.tableCache[obj.TableID]
 
-	if table.table.Code != a.Receiver {
+	if tab.table.Code != a.Receiver {
 		return fmt.Errorf("db access violation")
 	}
 
-	overhead := config.GetBillableSize("key_value_object")
+	overhead := table.KeyValueObjectBillableSize
 	oldSize := int64(obj.Value.Size()) + int64(overhead)
 	newSize := int64(bufferSize) + int64(overhead)
 
@@ -571,20 +577,20 @@ func (a *applyContext) UpdateI64(iterator int, payer name.AccountName, buffer []
 }
 
 func (a *applyContext) RemoveI64(iterator int) error {
-	obj := (a.KeyValueCache.get(iterator)).(*core.KeyValue)
-	table, err := a.KeyValueCache.getTable(obj.TableID)
+	obj := (a.KeyValueCache.get(iterator)).(*table.KeyValue)
+	tab, err := a.KeyValueCache.getTable(obj.TableID)
 
 	if err != nil {
 		return err
-	} else if table.Code != a.Receiver {
+	} else if tab.Code != a.Receiver {
 		return errDatabaseAccessViolation
 	}
 
-	ramDelta := int64(uint64(len(obj.Value))+config.GetBillableSize("key_value_object")) * -1
+	ramDelta := int64(uint64(len(obj.Value))+table.KeyValueObjectBillableSize) * -1
 	a.UpdateDatabaseUsage(obj.Payer, ramDelta)
 
-	if err := a.Session.ModifyTable(table, func() {
-		table.Count = table.Count - 1
+	if err := a.Session.ModifyTable(tab, func() {
+		tab.Count = tab.Count - 1
 	}); err != nil {
 		return fmt.Errorf("failed to update table: %v", err)
 	}
@@ -593,8 +599,8 @@ func (a *applyContext) RemoveI64(iterator int) error {
 		return err
 	}
 
-	if table.Count == 0 {
-		if err := a.RemoveTable(table); err != nil {
+	if tab.Count == 0 {
+		if err := a.RemoveTable(tab); err != nil {
 			return err
 		}
 	}
@@ -609,7 +615,7 @@ func (a *applyContext) NextI64(iterator int, primaryKey *uint64) (int, error) {
 		return -1, nil // cannot increment past end iterator of table
 	}
 
-	obj := (a.KeyValueCache.get(iterator)).(*core.KeyValue) // check for iterator != -1 happens in this call
+	obj := (a.KeyValueCache.get(iterator)).(*table.KeyValue) // check for iterator != -1 happens in this call
 	nextKv, err := a.Session.FindNextKeyValue(obj)
 
 	if err != nil {
@@ -654,7 +660,7 @@ func (a *applyContext) PreviousI64(iterator int, primaryKey *uint64) (int, error
 		return a.KeyValueCache.add(obj), nil
 	}
 
-	obj := (a.KeyValueCache.get(iterator)).(*core.KeyValue)
+	obj := (a.KeyValueCache.get(iterator)).(*table.KeyValue)
 	nextKv, err := a.Session.FindPreviousKeyValue(obj)
 
 	if err != nil {
@@ -736,47 +742,47 @@ func (a *applyContext) EndI64(code name.AccountName, scope name.ScopeName, table
 	return a.KeyValueCache.cacheTable(tab), nil
 }
 
-func (a *applyContext) RemoveTable(table *core.Table) error {
-	ramDelta := int64(config.GetBillableSize("table_id_object")) * -1
+func (a *applyContext) RemoveTable(tab *table.Table) error {
+	ramDelta := int64(table.TableIdObjectBillableSize) * -1
 
-	if err := a.UpdateDatabaseUsage(table.Payer, ramDelta); err != nil {
+	if err := a.UpdateDatabaseUsage(tab.Payer, ramDelta); err != nil {
 		return err
 	}
 
-	return a.Session.RemoveTable(table)
+	return a.Session.RemoveTable(tab)
 }
 
-func (a *applyContext) FindOrCreateTable(code name.AccountName, scope name.ScopeName, tableName name.TableName, payer name.AccountName) (*core.Table, error) {
-	table, err := a.Session.FindTableByCodeScopeTable(code, scope, tableName)
+func (a *applyContext) FindOrCreateTable(code name.AccountName, scope name.ScopeName, tableName name.TableName, payer name.AccountName) (*table.Table, error) {
+	tab, err := a.Session.FindTableByCodeScopeTable(code, scope, tableName)
 
 	if err != nil {
 		if err == badger.ErrKeyNotFound {
-			ramDelta := int64(config.GetBillableSize("table_id_object"))
+			ramDelta := int64(table.TableIdObjectBillableSize)
 
 			if err := a.UpdateDatabaseUsage(payer, ramDelta); err != nil {
 				return nil, err
 			}
 
-			table = &core.Table{
+			tab = &table.Table{
 				Code:  code,
 				Scope: scope,
 				Table: tableName,
 				Payer: payer,
 			}
 
-			err = a.Session.CreateTable(table)
+			err = a.Session.CreateTable(tab)
 
 			if err != nil {
 				return nil, err
 			}
 
-			return table, nil
+			return tab, nil
 		}
 
 		return nil, err
 	}
 
-	return table, nil
+	return tab, nil
 }
 
 func (a *applyContext) UpdateDatabaseUsage(payer name.AccountName, delta int64) error {
@@ -795,7 +801,7 @@ func (a *applyContext) AddRamUsage(account name.AccountName, delta int64) {
 	a.AccountRamDeltas[account] += delta
 }
 
-func (a *applyContext) CheckAuthorization(actions []core.Action, providedKeys ecc.PublicKeySet) error {
+func (a *applyContext) CheckAuthorization(actions []transaction.Action, providedKeys ecc.PublicKeySet) error {
 	//a.Authorization.CheckAuthorization()
 	return nil
 }
@@ -808,7 +814,7 @@ func (a *applyContext) SetActionReturnValue(value []byte) {
 	a.ActionReturnValue = value
 }
 
-func (a *applyContext) GetPackedTransaction() *core.PackedTransaction {
+func (a *applyContext) GetPackedTransaction() *transaction.PackedTransaction {
 	return a.TrxContext.PackedTrx
 }
 
@@ -817,24 +823,22 @@ func (a *applyContext) IsContextPrivileged() bool {
 }
 
 func (a *applyContext) IsPrivileged(name name.AccountName) (bool, error) {
-	account, err := a.Session.FindAccountByName(name)
-
+	account, err := a.Session.FindAccountMetaDataByName(name)
 	if err != nil {
 		return false, err
 	}
 
-	return account.Privileged, nil
+	return account.IsPrivileged(), nil
 }
 
 func (a *applyContext) SetPrivileged(name name.AccountName, privileged bool) error {
-	account, err := a.Session.FindAccountByName(name)
-
+	account, err := a.Session.FindAccountMetaDataByName(name)
 	if err != nil {
 		return err
 	}
 
-	return a.Session.ModifyAccount(account, func() {
-		account.Privileged = privileged
+	return a.Session.ModifyAccountMetaData(account, func() {
+		account.SetPrivileged(privileged)
 	})
 }
 

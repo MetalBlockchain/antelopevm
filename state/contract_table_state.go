@@ -4,17 +4,18 @@ import (
 	"bytes"
 	"math"
 
-	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/MetalBlockchain/antelopevm/core/name"
+	"github.com/MetalBlockchain/antelopevm/chain/name"
+	"github.com/MetalBlockchain/antelopevm/chain/table"
+	"github.com/MetalBlockchain/antelopevm/chain/types"
 	"github.com/dgraph-io/badger/v3"
 )
 
-func (s *Session) FindTable(id core.IdType) (*core.Table, error) {
+func (s *Session) FindTable(id types.IdType) (*table.Table, error) {
 	if obj, found := s.tableCache.Get(id); found {
 		return obj, nil
 	}
 
-	key := getObjectKeyByIndex(&core.Table{ID: id}, "id")
+	key := getObjectKeyByIndex(&table.Table{ID: id}, "id")
 	item, err := s.transaction.Get(key)
 
 	if err != nil {
@@ -27,17 +28,16 @@ func (s *Session) FindTable(id core.IdType) (*core.Table, error) {
 		return nil, err
 	}
 
-	out := &core.Table{}
-
-	if _, err := out.UnmarshalMsg(data); err != nil {
+	out := &table.Table{}
+	if _, err := Codec.Unmarshal(data, out); err != nil {
 		return nil, err
 	}
 
 	return out, nil
 }
 
-func (s *Session) FindTableByCodeScopeTable(code name.AccountName, scope name.ScopeName, table name.TableName) (*core.Table, error) {
-	key := getObjectKeyByIndex(&core.Table{Code: code, Scope: scope, Table: table}, "byCodeScopeTable")
+func (s *Session) FindTableByCodeScopeTable(code name.AccountName, scope name.ScopeName, tableName name.TableName) (*table.Table, error) {
+	key := getObjectKeyByIndex(&table.Table{Code: code, Scope: scope, Table: tableName}, "byCodeScopeTable")
 	item, err := s.transaction.Get(key)
 
 	if err != nil {
@@ -50,15 +50,15 @@ func (s *Session) FindTableByCodeScopeTable(code name.AccountName, scope name.Sc
 		return nil, err
 	}
 
-	return s.FindTable(core.NewIdType(data))
+	return s.FindTable(types.NewIdType(data))
 }
 
-func (s *Session) FindOrCreateTable(code name.AccountName, scope name.ScopeName, tableName name.TableName, payer name.AccountName) (*core.Table, error) {
-	table, err := s.FindTableByCodeScopeTable(code, scope, tableName)
+func (s *Session) FindOrCreateTable(code name.AccountName, scope name.ScopeName, tableName name.TableName, payer name.AccountName) (*table.Table, error) {
+	tab, err := s.FindTableByCodeScopeTable(code, scope, tableName)
 
 	if err != nil {
 		if err == badger.ErrKeyNotFound {
-			table := &core.Table{
+			tab := &table.Table{
 				Code:  code,
 				Scope: scope,
 				Table: tableName,
@@ -66,40 +66,40 @@ func (s *Session) FindOrCreateTable(code name.AccountName, scope name.ScopeName,
 				Count: 0,
 			}
 
-			if err := s.CreateTable(table); err != nil {
+			if err := s.CreateTable(tab); err != nil {
 				return nil, err
 			}
 
-			return table, nil
+			return tab, nil
 		}
 
 		return nil, err
 	}
 
-	return table, nil
+	return tab, nil
 }
 
-func (s *Session) CreateTable(in *core.Table) error {
-	return s.create(true, func(id core.IdType) error {
+func (s *Session) CreateTable(in *table.Table) error {
+	return s.create(true, func(id types.IdType) error {
 		in.ID = id
 		return nil
 	}, in)
 }
 
-func (s *Session) ModifyTable(in *core.Table, modifyFunc func()) error {
+func (s *Session) ModifyTable(in *table.Table, modifyFunc func()) error {
 	return s.modify(in, modifyFunc)
 }
 
-func (s *Session) RemoveTable(in *core.Table) error {
+func (s *Session) RemoveTable(in *table.Table) error {
 	return s.remove(in)
 }
 
-func (s *Session) FindKeyValue(id core.IdType) (*core.KeyValue, error) {
+func (s *Session) FindKeyValue(id types.IdType) (*table.KeyValue, error) {
 	if obj, found := s.kvCache.Get(id); found {
 		return obj, nil
 	}
 
-	key := getObjectKeyByIndex(&core.KeyValue{ID: id}, "id")
+	key := getObjectKeyByIndex(&table.KeyValue{ID: id}, "id")
 	item, err := s.transaction.Get(key)
 
 	if err != nil {
@@ -112,9 +112,8 @@ func (s *Session) FindKeyValue(id core.IdType) (*core.KeyValue, error) {
 		return nil, err
 	}
 
-	out := &core.KeyValue{}
-
-	if _, err := out.UnmarshalMsg(data); err != nil {
+	out := &table.KeyValue{}
+	if _, err := Codec.Unmarshal(data, out); err != nil {
 		return nil, err
 	}
 
@@ -123,8 +122,8 @@ func (s *Session) FindKeyValue(id core.IdType) (*core.KeyValue, error) {
 	return out, nil
 }
 
-func (s *Session) FindKeyValueByScopePrimary(tableId core.IdType, primaryKey uint64) (*core.KeyValue, error) {
-	key := getObjectKeyByIndex(&core.KeyValue{TableID: tableId, PrimaryKey: primaryKey}, "byScopePrimary")
+func (s *Session) FindKeyValueByScopePrimary(tableId types.IdType, primaryKey uint64) (*table.KeyValue, error) {
+	key := getObjectKeyByIndex(&table.KeyValue{TableID: tableId, PrimaryKey: primaryKey}, "byScopePrimary")
 	item, err := s.transaction.Get(key)
 
 	if err != nil {
@@ -137,21 +136,21 @@ func (s *Session) FindKeyValueByScopePrimary(tableId core.IdType, primaryKey uin
 		return nil, err
 	}
 
-	return s.FindKeyValue(core.NewIdType(data))
+	return s.FindKeyValue(types.NewIdType(data))
 }
 
-func (s *Session) FindKeyValuesByScope(tableId core.IdType) *Iterator[core.KeyValue] {
-	key := getPartialKey("byScopePrimary", &core.KeyValue{}, tableId)
+func (s *Session) FindKeyValuesByScope(tableId types.IdType) *Iterator[table.KeyValue] {
+	key := getPartialKey("byScopePrimary", &table.KeyValue{}, tableId)
 	opts := badger.DefaultIteratorOptions
 	opts.Prefix = key
 
-	return newIterator(s, key, func(b []byte) (*core.KeyValue, error) {
-		return s.FindKeyValue(core.NewIdType(b))
+	return newIterator(s, key, func(b []byte) (*table.KeyValue, error) {
+		return s.FindKeyValue(types.NewIdType(b))
 	})
 }
 
-func (s *Session) CreateKeyValue(in *core.KeyValue) error {
-	err := s.create(true, func(id core.IdType) error {
+func (s *Session) CreateKeyValue(in *table.KeyValue) error {
+	err := s.create(true, func(id types.IdType) error {
 		in.ID = id
 		return nil
 	}, in)
@@ -165,7 +164,7 @@ func (s *Session) CreateKeyValue(in *core.KeyValue) error {
 	return nil
 }
 
-func (s *Session) ModifyKeyValue(in *core.KeyValue, modifyFunc func()) error {
+func (s *Session) ModifyKeyValue(in *table.KeyValue, modifyFunc func()) error {
 	if err := s.modify(in, modifyFunc); err != nil {
 		return err
 	}
@@ -175,7 +174,7 @@ func (s *Session) ModifyKeyValue(in *core.KeyValue, modifyFunc func()) error {
 	return nil
 }
 
-func (s *Session) RemoveKeyValue(in *core.KeyValue) error {
+func (s *Session) RemoveKeyValue(in *table.KeyValue) error {
 	if err := s.remove(in); err != nil {
 		return err
 	}
@@ -185,8 +184,8 @@ func (s *Session) RemoveKeyValue(in *core.KeyValue) error {
 	return nil
 }
 
-func (s *Session) FindNextKeyValue(kv *core.KeyValue) (*core.KeyValue, error) {
-	key := getObjectKeyByIndex(&core.KeyValue{TableID: kv.TableID, PrimaryKey: kv.PrimaryKey}, "byScopePrimary")
+func (s *Session) FindNextKeyValue(kv *table.KeyValue) (*table.KeyValue, error) {
+	key := getObjectKeyByIndex(&table.KeyValue{TableID: kv.TableID, PrimaryKey: kv.PrimaryKey}, "byScopePrimary")
 	opts := badger.DefaultIteratorOptions
 	opts.PrefetchSize = 2
 	opts.Prefix = key
@@ -201,11 +200,11 @@ func (s *Session) FindNextKeyValue(kv *core.KeyValue) (*core.KeyValue, error) {
 		return nil, err
 	}
 
-	return s.FindKeyValue(core.NewIdType(data))
+	return s.FindKeyValue(types.NewIdType(data))
 }
 
-func (s *Session) FindPreviousKeyValue(kv *core.KeyValue) (*core.KeyValue, error) {
-	key := getObjectKeyByIndex(&core.KeyValue{TableID: kv.TableID, PrimaryKey: kv.PrimaryKey}, "byScopePrimary")
+func (s *Session) FindPreviousKeyValue(kv *table.KeyValue) (*table.KeyValue, error) {
+	key := getObjectKeyByIndex(&table.KeyValue{TableID: kv.TableID, PrimaryKey: kv.PrimaryKey}, "byScopePrimary")
 	opts := badger.DefaultIteratorOptions
 	opts.PrefetchSize = 2
 	opts.Prefix = key
@@ -221,22 +220,22 @@ func (s *Session) FindPreviousKeyValue(kv *core.KeyValue) (*core.KeyValue, error
 		return nil, err
 	}
 
-	return s.FindKeyValue(core.NewIdType(data))
+	return s.FindKeyValue(types.NewIdType(data))
 }
 
 // Find KV with primary key greater than or equal to the provided primary key
-func (s *Session) LowerboundKeyValueByScopePrimary(table *core.Table, primaryKey uint64) (*core.KeyValue, error) {
+func (s *Session) LowerboundKeyValueByScopePrimary(tab *table.Table, primaryKey uint64) (*table.KeyValue, error) {
 	// See if we have the object
-	if kv, err := s.FindKeyValueByScopePrimary(table.ID, primaryKey); err == nil {
+	if kv, err := s.FindKeyValueByScopePrimary(tab.ID, primaryKey); err == nil {
 		return kv, nil
 	} else if err != badger.ErrKeyNotFound {
 		return nil, err
 	}
 
-	key := getObjectKeyByIndex(&core.KeyValue{TableID: table.ID, PrimaryKey: primaryKey}, "byScopePrimary")
-	requiredPrefix := getPartialKey("byScopePrimary", &core.KeyValue{}, table.ID)
-	iterator := newIterator(s, requiredPrefix, func(b []byte) (*core.KeyValue, error) {
-		return s.FindKeyValue(core.NewIdType(b))
+	key := getObjectKeyByIndex(&table.KeyValue{TableID: tab.ID, PrimaryKey: primaryKey}, "byScopePrimary")
+	requiredPrefix := getPartialKey("byScopePrimary", &table.KeyValue{}, tab.ID)
+	iterator := newIterator(s, requiredPrefix, func(b []byte) (*table.KeyValue, error) {
+		return s.FindKeyValue(types.NewIdType(b))
 	})
 	defer iterator.Close()
 	iterator.Seek(key)
@@ -249,11 +248,11 @@ func (s *Session) LowerboundKeyValueByScopePrimary(table *core.Table, primaryKey
 }
 
 // Find KV with primary key less than the provided primary key
-func (s *Session) UpperboundKeyValueByScope(table *core.Table) (*core.KeyValue, error) {
-	key := getObjectKeyByIndex(&core.KeyValue{TableID: table.ID, PrimaryKey: math.MaxUint64}, "byScopePrimary")
-	requiredPrefix := getPartialKey("byScopePrimary", &core.KeyValue{}, table.ID)
-	iterator := newReverseIterator(s, requiredPrefix, func(b []byte) (*core.KeyValue, error) {
-		return s.FindKeyValue(core.NewIdType(b))
+func (s *Session) UpperboundKeyValueByScope(tab *table.Table) (*table.KeyValue, error) {
+	key := getObjectKeyByIndex(&table.KeyValue{TableID: tab.ID, PrimaryKey: math.MaxUint64}, "byScopePrimary")
+	requiredPrefix := getPartialKey("byScopePrimary", &table.KeyValue{}, tab.ID)
+	iterator := newReverseIterator(s, requiredPrefix, func(b []byte) (*table.KeyValue, error) {
+		return s.FindKeyValue(types.NewIdType(b))
 	})
 	defer iterator.Close()
 	iterator.Seek(key)
@@ -265,11 +264,11 @@ func (s *Session) UpperboundKeyValueByScope(table *core.Table) (*core.KeyValue, 
 	return nil, badger.ErrKeyNotFound
 }
 
-func (s *Session) UpperboundKeyValueByScopePrimary(table *core.Table, primaryKey uint64) (*core.KeyValue, error) {
-	key := getObjectKeyByIndex(&core.KeyValue{TableID: table.ID, PrimaryKey: primaryKey}, "byScopePrimary")
-	requiredPrefix := getPartialKey("byScopePrimary", &core.KeyValue{}, table.ID)
-	iterator := newReverseIterator(s, requiredPrefix, func(b []byte) (*core.KeyValue, error) {
-		return s.FindKeyValue(core.NewIdType(b))
+func (s *Session) UpperboundKeyValueByScopePrimary(tab *table.Table, primaryKey uint64) (*table.KeyValue, error) {
+	key := getObjectKeyByIndex(&table.KeyValue{TableID: tab.ID, PrimaryKey: primaryKey}, "byScopePrimary")
+	requiredPrefix := getPartialKey("byScopePrimary", &table.KeyValue{}, tab.ID)
+	iterator := newReverseIterator(s, requiredPrefix, func(b []byte) (*table.KeyValue, error) {
+		return s.FindKeyValue(types.NewIdType(b))
 	})
 	defer iterator.Close()
 	iterator.Seek(key)

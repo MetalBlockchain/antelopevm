@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/MetalBlockchain/antelopevm/core/name"
+	"github.com/MetalBlockchain/antelopevm/chain/asset"
+	"github.com/MetalBlockchain/antelopevm/chain/name"
 	"github.com/MetalBlockchain/antelopevm/crypto/rlp"
 	"github.com/MetalBlockchain/antelopevm/vm/service"
 	"github.com/gin-gonic/gin"
@@ -18,8 +18,8 @@ type GetCurrencyStatsRequest struct {
 }
 
 type CurrencyStats struct {
-	Supply    core.Asset       `json:"supply"`
-	MaxSupply core.Asset       `json:"max_supply"`
+	Supply    asset.Asset      `json:"supply"`
+	MaxSupply asset.Asset      `json:"max_supply"`
 	Issuer    name.AccountName `json:"issuer"`
 }
 
@@ -39,7 +39,7 @@ func GetCurrencyStats(vm service.VM) gin.HandlerFunc {
 		response := GetCurrencyStatsResponse{}
 		session := vm.GetState().CreateSession(false)
 		defer session.Discard()
-		symbol, err := core.StringToSymbol(0, strings.ToUpper(body.Symbol))
+		symbol, err := asset.StringToSymbol(0, strings.ToUpper(body.Symbol))
 
 		if err != nil {
 			c.JSON(400, service.NewError(400, "invalid symbol"))

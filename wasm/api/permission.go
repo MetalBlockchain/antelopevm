@@ -1,9 +1,9 @@
 package api
 
 import (
-	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/MetalBlockchain/antelopevm/core/authority"
-	"github.com/MetalBlockchain/antelopevm/core/name"
+	"github.com/MetalBlockchain/antelopevm/chain/authority"
+	"github.com/MetalBlockchain/antelopevm/chain/name"
+	"github.com/MetalBlockchain/antelopevm/chain/transaction"
 	"github.com/MetalBlockchain/antelopevm/crypto/ecc"
 	"github.com/MetalBlockchain/antelopevm/crypto/rlp"
 	"github.com/hashicorp/go-set"
@@ -23,7 +23,7 @@ func checkTransactionAuthorization(context Context) interface{} {
 		permsBytes := context.ReadMemory(perms, permsSize)
 
 		// Parse trx data
-		trx := core.Transaction{}
+		trx := transaction.Transaction{}
 		if err := rlp.DecodeBytes(trxDataBytes, trx); err != nil {
 			panic("could not decode transaction data")
 		}
@@ -81,7 +81,7 @@ func getAccountCreationTime(context Context) interface{} {
 			panic(err)
 		}
 
-		return account.CreationDate.TimeSinceEpoch().Count()
+		return account.CreationDate.ToTimePoint().TimeSinceEpoch().Count()
 	}
 }
 

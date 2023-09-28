@@ -37,7 +37,6 @@ func CreateUint128(i int) Uint128 {
 	if i >= 0 {
 		return Uint128{Low: uint64(i), High: 0}
 	} else {
-		fmt.Println("error")
 		return Uint128{}
 	}
 }

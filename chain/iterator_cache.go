@@ -3,25 +3,26 @@ package chain
 import (
 	"fmt"
 
-	"github.com/MetalBlockchain/antelopevm/core"
+	"github.com/MetalBlockchain/antelopevm/chain/table"
+	"github.com/MetalBlockchain/antelopevm/chain/types"
 )
 
 type pairTableIterator struct {
-	table    *core.Table
+	table    *table.Table
 	iterator int
 }
 
 type IteratorCache struct {
-	tableCache         map[core.IdType]*pairTableIterator
-	endIteratorToTable []*core.Table
+	tableCache         map[types.IdType]*pairTableIterator
+	endIteratorToTable []*table.Table
 	iteratorToObject   []interface{}
 	objectToIterator   map[interface{}]int
 }
 
 func NewIteratorCache() *IteratorCache {
 	i := IteratorCache{
-		tableCache:         make(map[core.IdType]*pairTableIterator),
-		endIteratorToTable: make([]*core.Table, 4),
+		tableCache:         make(map[types.IdType]*pairTableIterator),
+		endIteratorToTable: make([]*table.Table, 4),
 		iteratorToObject:   make([]interface{}, 8),
 		objectToIterator:   make(map[interface{}]int),
 	}
@@ -29,14 +30,14 @@ func NewIteratorCache() *IteratorCache {
 	return &i
 }
 
-func (i *IteratorCache) getEndIteratorByTableId(id core.IdType) (int, error) {
+func (i *IteratorCache) getEndIteratorByTableId(id types.IdType) (int, error) {
 	if table, found := i.tableCache[id]; found {
 		return table.iterator, nil
 	}
 
 	return 0, fmt.Errorf("an invariant was broken, table should be in cache")
 }
-func (i *IteratorCache) findTableByEndIterator(endIterator int) (*core.Table, error) {
+func (i *IteratorCache) findTableByEndIterator(endIterator int) (*table.Table, error) {
 	index := i.endIteratorToIndex(endIterator)
 
 	if index >= len(i.endIteratorToTable) {
@@ -47,7 +48,7 @@ func (i *IteratorCache) findTableByEndIterator(endIterator int) (*core.Table, er
 }
 func (i *IteratorCache) endIteratorToIndex(endIterator int) int { return (-endIterator - 2) }
 func (i *IteratorCache) indexToEndIterator(index int) int       { return -(index + 2) }
-func (i *IteratorCache) cacheTable(table *core.Table) int {
+func (i *IteratorCache) cacheTable(table *table.Table) int {
 	if itr, ok := i.tableCache[table.ID]; ok {
 		return itr.iterator
 	}
@@ -62,7 +63,7 @@ func (i *IteratorCache) cacheTable(table *core.Table) int {
 	return ei
 }
 
-func (i *IteratorCache) getTable(id core.IdType) (*core.Table, error) {
+func (i *IteratorCache) getTable(id types.IdType) (*table.Table, error) {
 	if table, ok := i.tableCache[id]; ok {
 		return table.table, nil
 	}

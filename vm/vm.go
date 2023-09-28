@@ -11,9 +11,11 @@ import (
 	"time"
 
 	"github.com/MetalBlockchain/antelopevm/chain"
-	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/MetalBlockchain/antelopevm/core/name"
-	"github.com/MetalBlockchain/antelopevm/core/transaction"
+	chainBlock "github.com/MetalBlockchain/antelopevm/chain/block"
+	"github.com/MetalBlockchain/antelopevm/chain/name"
+	chainTime "github.com/MetalBlockchain/antelopevm/chain/time"
+	"github.com/MetalBlockchain/antelopevm/chain/transaction"
+	"github.com/MetalBlockchain/antelopevm/chain/types"
 	"github.com/MetalBlockchain/antelopevm/crypto"
 	"github.com/MetalBlockchain/antelopevm/mempool"
 	"github.com/MetalBlockchain/antelopevm/state"
@@ -76,7 +78,7 @@ type VM struct {
 	// Block ID --> Block
 	// Each element is a block that passed verification but
 	// hasn't yet been accepted/rejected
-	verifiedBlocks map[core.BlockHash]*state.Block
+	verifiedBlocks map[chainBlock.BlockHash]*state.Block
 
 	// Indicates that this VM has finised bootstrapping for the chain
 	bootstrapped bool
@@ -116,10 +118,10 @@ func (vm *VM) Initialize(
 	vm.dbManager = dbManager
 	vm.ctx = chainCtx
 	vm.toEngine = toEngine
-	vm.verifiedBlocks = make(map[core.BlockHash]*state.Block)
+	vm.verifiedBlocks = make(map[chainBlock.BlockHash]*state.Block)
 
 	// Create new state and controller
-	vm.chainId = core.ChainIdType(*crypto.NewSha256String("cf057bbfb72640471fd910bcb67639c22df9f92470936cddc1ade0e2f2e7dc4f"))
+	vm.chainId = types.ChainIdType(*crypto.NewSha256String("cf057bbfb72640471fd910bcb67639c22df9f92470936cddc1ade0e2f2e7dc4f"))
 	vm.dbPath = filepath.Join(vm.ctx.ChainDataDir, chainCtx.NodeID.String())
 
 	if db, err := badger.Open(badger.DefaultOptions("").WithInMemory(true)); err == nil {
@@ -177,7 +179,10 @@ func (vm *VM) initGenesis(genesisData []byte) error {
 		return nil
 	}
 
-	genesisFile := chain.ParseGenesisData(genesisData)
+	genesisFile, err := chain.ParseGenesisData(genesisData)
+	if err != nil {
+		return err
+	}
 
 	if err := vm.controller.InitGenesis(session, genesisFile); err != nil {
 		return err
@@ -185,7 +190,7 @@ func (vm *VM) initGenesis(genesisData []byte) error {
 
 	// Create the genesis block
 	// Timestamp of genesis block is 0. It has no parent.
-	genesisBlock, err := vm.NewBlock(core.BlockHash(ids.Empty), 0, []core.TransactionReceipt{}, genesisFile.InitialTimeStamp)
+	genesisBlock, err := vm.NewBlock(chainBlock.BlockHash(ids.Empty), 0, []transaction.TransactionReceipt{}, genesisFile.InitialTimeStamp)
 
 	if err != nil {
 		log.Error("error while creating genesis block: %v", err)
@@ -271,7 +276,7 @@ func (vm *VM) BuildBlock(ctx context.Context) (snowman.Block, error) {
 
 // GetBlock implements the snowman.ChainVM interface
 func (vm *VM) GetBlock(ctx context.Context, blkID ids.ID) (snowman.Block, error) {
-	block, err := vm.getBlock(core.BlockHash(blkID))
+	block, err := vm.getBlock(chainBlock.BlockHash(blkID))
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get block %s: %s", blkID, err)
@@ -280,7 +285,7 @@ func (vm *VM) GetBlock(ctx context.Context, blkID ids.ID) (snowman.Block, error)
 	return block, nil
 }
 
-func (vm *VM) getBlock(blkID core.BlockHash) (*state.Block, error) {
+func (vm *VM) getBlock(blkID chainBlock.BlockHash) (*state.Block, error) {
 	// If block is in memory, return it.
 	if blk, exists := vm.verifiedBlocks[blkID]; exists {
 		return blk, nil
@@ -307,9 +312,8 @@ func (vm *VM) LastAccepted(ctx context.Context) (ids.ID, error) {
 func (vm *VM) ParseBlock(ctx context.Context, bytes []byte) (snowman.Block, error) {
 	// A new empty block
 	block := &state.Block{}
-
 	// Unmarshal the byte repr. of the block into our empty block
-	if _, err := block.UnmarshalMsg(bytes); err != nil {
+	if _, err := state.Codec.Unmarshal(bytes, block); err != nil {
 		log.Error("couldn't parse block", "error", err)
 		return nil, err
 	}
@@ -332,14 +336,12 @@ func (vm *VM) ParseBlock(ctx context.Context, bytes []byte) (snowman.Block, erro
 // - the block's parent is [parentID]
 // - the block's data is [data]
 // - the block's timestamp is [timestamp]
-func (vm *VM) NewBlock(parentID core.BlockHash, height uint64, receipts []core.TransactionReceipt, timestamp core.TimePoint) (*state.Block, error) {
+func (vm *VM) NewBlock(parentID chainBlock.BlockHash, height uint64, receipts []transaction.TransactionReceipt, timestamp chainTime.TimePoint) (*state.Block, error) {
 	block := &state.Block{
-		Header: core.BlockHeader{
-			Created:           timestamp,
-			Producer:          name.StringToName("eosio"),
-			Confirmed:         1,
-			PreviousBlockHash: parentID,
-			Index:             height,
+		Header: chainBlock.BlockHeader{
+			Timestamp: chainBlock.NewBlockTimeStampFromTimePoint(timestamp),
+			Producer:  name.StringToName("eosio"),
+			Confirmed: 1,
 		},
 		Transactions: receipts,
 	}
@@ -415,11 +417,11 @@ func (vm *VM) GetMempool() *mempool.Mempool {
 }
 
 func (vm *VM) GetStoredBlock(context context.Context, blkID ids.ID) (*state.Block, error) {
-	if blk, exists := vm.verifiedBlocks[core.BlockHash(blkID)]; exists {
+	if blk, exists := vm.verifiedBlocks[chainBlock.BlockHash(blkID)]; exists {
 		return blk, nil
 	}
 
-	stBlk, err := vm.getBlock(core.BlockHash(blkID))
+	stBlk, err := vm.getBlock(chainBlock.BlockHash(blkID))
 
 	if err != nil {
 		log.Error("could not get stored block from DB", "id", blkID)
@@ -429,14 +431,12 @@ func (vm *VM) GetStoredBlock(context context.Context, blkID ids.ID) (*state.Bloc
 	return stBlk, nil
 }
 
-func (vm *VM) ExecuteTransaction(trx *core.PackedTransaction, block *state.Block, session *state.Session) (*core.TransactionTrace, error) {
+func (vm *VM) ExecuteTransaction(trx *transaction.PackedTransaction, block *state.Block, session *state.Session) (*transaction.TransactionTrace, error) {
 	if err := trx.UnpackTransaction(); err != nil {
 		return nil, err
 	}
 
-	log.Info("processing tx", "tx", trx.Id)
-
-	trxMeta, err := transaction.RecoverKeys(trx, vm.chainId, core.MaxMicroseconds(), transaction.Input, 0)
+	trxMeta, err := transaction.RecoverKeys(trx, vm.chainId, chainTime.MaxMicroseconds(), transaction.Input, 0)
 	trace, err := vm.controller.PushTransaction(*trxMeta, block, session)
 
 	if err != nil {

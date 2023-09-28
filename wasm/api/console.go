@@ -5,7 +5,7 @@ import (
 	"math"
 	"strconv"
 
-	"github.com/MetalBlockchain/antelopevm/core/name"
+	"github.com/MetalBlockchain/antelopevm/chain/name"
 	"github.com/MetalBlockchain/antelopevm/crypto/rlp"
 	antelopeMath "github.com/MetalBlockchain/antelopevm/math"
 )

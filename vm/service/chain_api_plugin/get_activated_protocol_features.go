@@ -3,7 +3,7 @@ package chain_api_plugin
 import (
 	"net/http"
 
-	"github.com/MetalBlockchain/antelopevm/core/protocol"
+	"github.com/MetalBlockchain/antelopevm/chain/protocol"
 	"github.com/MetalBlockchain/antelopevm/vm/service"
 	"github.com/gin-gonic/gin"
 )

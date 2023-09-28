@@ -30,3 +30,4 @@ fi
 # Build timestampvm, which is run as a subprocess
 echo "Building AntelopeVM in $binary_path/$name"
 go build -o "$binary_path/$name" "main/"*.go
+# go build -o "$binary_path/cleos" "programs/cleos/main/"*.go

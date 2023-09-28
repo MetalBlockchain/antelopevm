@@ -4,10 +4,12 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/MetalBlockchain/antelopevm/chain/authority"
+	"github.com/MetalBlockchain/antelopevm/chain/name"
+	"github.com/MetalBlockchain/antelopevm/chain/time"
+	"github.com/MetalBlockchain/antelopevm/chain/transaction"
+	"github.com/MetalBlockchain/antelopevm/chain/types"
 	"github.com/MetalBlockchain/antelopevm/config"
-	"github.com/MetalBlockchain/antelopevm/core"
-	"github.com/MetalBlockchain/antelopevm/core/authority"
-	"github.com/MetalBlockchain/antelopevm/core/name"
 	"github.com/MetalBlockchain/antelopevm/crypto/ecc"
 	"github.com/MetalBlockchain/antelopevm/state"
 	wasmApi "github.com/MetalBlockchain/antelopevm/wasm/api"
@@ -31,7 +33,7 @@ func NewAuthorizationManager(controller *Controller, s *state.Session) *Authoriz
 	}
 }
 
-func (a *AuthorizationManager) GetPermission(level authority.PermissionLevel) (*core.Permission, error) {
+func (a *AuthorizationManager) GetPermission(level authority.PermissionLevel) (*authority.Permission, error) {
 	if level.Actor.Empty() || level.Permission.Empty() {
 		return nil, fmt.Errorf("invalid permission")
 	}
@@ -39,15 +41,15 @@ func (a *AuthorizationManager) GetPermission(level authority.PermissionLevel) (*
 	return a.Session.FindPermissionByOwner(level.Actor, level.Permission)
 }
 
-func (a *AuthorizationManager) ModifyPermission(permission *core.Permission, auth *authority.Authority) error {
+func (a *AuthorizationManager) ModifyPermission(permission *authority.Permission, auth *authority.Authority) error {
 	return a.Session.ModifyPermission(permission, func() {
 		permission.Auth = *auth
-		permission.LastUpdated = core.Now()
+		permission.LastUpdated = time.Now()
 	})
 }
 
-func (a *AuthorizationManager) CreatePermission(account name.AccountName, name name.PermissionName, parent core.IdType, auth authority.Authority, initialCreationTime core.TimePoint) (*core.Permission, error) {
-	permission := &core.Permission{
+func (a *AuthorizationManager) CreatePermission(account name.AccountName, name name.PermissionName, parent types.IdType, auth authority.Authority, initialCreationTime time.TimePoint) (*authority.Permission, error) {
+	permission := &authority.Permission{
 		Parent:      parent,
 		Owner:       account,
 		Name:        name,
@@ -92,7 +94,7 @@ func (a *AuthorizationManager) GetPermissionAuthority(level *authority.Permissio
 	return &permission.Auth, nil
 }
 
-func (a *AuthorizationManager) CheckAuthorization(actions []*core.Action, keys ecc.PublicKeySet, providedPermissions []authority.PermissionLevel, allowUnusedKeys bool, satisfiedAuthorizations authority.PermissionLevelSet) error {
+func (a *AuthorizationManager) CheckAuthorization(actions []*transaction.Action, keys ecc.PublicKeySet, providedPermissions []authority.PermissionLevel, allowUnusedKeys bool, satisfiedAuthorizations authority.PermissionLevelSet) error {
 	authorityChecker := NewAuthorityChecker(a.GetPermissionAuthority, keys, providedPermissions, config.MaxAuthDepth)
 	permissionsToSatisfy := authority.NewPermissionLevelSet(4)
 
@@ -175,7 +177,7 @@ func (a *AuthorizationManager) CheckAuthorizationByPermissionLevel(account name.
 	return nil
 }
 
-func (a *AuthorizationManager) GetRequiredKeys(transaction core.Transaction, keys ecc.PublicKeySet) ([]ecc.PublicKey, error) {
+func (a *AuthorizationManager) GetRequiredKeys(transaction transaction.Transaction, keys ecc.PublicKeySet) ([]ecc.PublicKey, error) {
 	checker := NewAuthorityChecker(a.GetPermissionAuthority, keys, []authority.PermissionLevel{}, 16)
 
 	for _, act := range transaction.Actions {
